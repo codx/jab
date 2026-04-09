@@ -1,0 +1,181 @@
+{
+  "nodes": {
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1696426674,
+        "narHash": "sha256-kvjfFW7WAETZlt09AgDn1MrtKzP7t90Vf7vypd3OL1U=",
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "rev": "0f9255e01c2351cc7d116c072cb317785dd33b33",
+        "type": "github"
+      },
+      "original": {
+        "owner": "edolstra",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "flake-utils": {
+      "inputs": {
+        "systems": "systems"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1775732571,
+        "narHash": "sha256-cd6wKenSQ6G6jikqxFLvyel47TkY30uOSvOBV9gYDX0=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "02f3fa0374fa13707d42d55d58ecc76b091f223c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1771043024,
+        "narHash": "sha256-O1XDr7EWbRp+kHrNNgLWgIrB0/US5wvw9K6RERWAj6I=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3aadb7ca9eac2891d52a9dec199d9580a6e2bf44",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-25.11",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "nixpkgs": "nixpkgs",
+        "tree-sitter-bash": "tree-sitter-bash",
+        "tree-sitter-hcl": "tree-sitter-hcl",
+        "tree-sitter-python": "tree-sitter-python",
+        "zig-overlay": "zig-overlay"
+      }
+    },
+    "systems": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems_2": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "tree-sitter-bash": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1764694914,
+        "narHash": "sha256-ONQ1Ljk3aRWjElSWD2crCFZraZoRj3b3/VELz1789GE=",
+        "owner": "tree-sitter",
+        "repo": "tree-sitter-bash",
+        "rev": "a06c2e4415e9bc0346c6b86d401879ffb44058f7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tree-sitter",
+        "repo": "tree-sitter-bash",
+        "type": "github"
+      }
+    },
+    "tree-sitter-hcl": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768660968,
+        "narHash": "sha256-Wp+2Zqg279kfHV3Lqcn3Gx7+Nl0PH09tya/tQTh70WA=",
+        "owner": "tree-sitter-grammars",
+        "repo": "tree-sitter-hcl",
+        "rev": "64ad62785d442eb4d45df3a1764962dafd5bc98b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tree-sitter-grammars",
+        "repo": "tree-sitter-hcl",
+        "type": "github"
+      }
+    },
+    "tree-sitter-python": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1757972015,
+        "narHash": "sha256-gHeja/X/Ux8fa5rh0b69/bcUcmHBcXsK5uJ1ibtuI20=",
+        "owner": "tree-sitter",
+        "repo": "tree-sitter-python",
+        "rev": "26855eabccb19c6abf499fbc5b8dc7cc9ab8bc64",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tree-sitter",
+        "repo": "tree-sitter-python",
+        "type": "github"
+      }
+    },
+    "zig-overlay": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "nixpkgs": "nixpkgs_2",
+        "systems": "systems_2"
+      },
+      "locked": {
+        "lastModified": 1775651458,
+        "narHash": "sha256-Vin1+HI1TJvBXS4d3rcflfCWL9MmJJjjoZ2ATsPHAqg=",
+        "owner": "mitchellh",
+        "repo": "zig-overlay",
+        "rev": "e9ed260913d18b2973a86eabc8e46642c4e04c75",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mitchellh",
+        "repo": "zig-overlay",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

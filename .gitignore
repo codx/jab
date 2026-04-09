@@ -4,6 +4,9 @@ zig-out/
 
 dist/
 
+# Nix
+result
+
 # Generated tree-sitter files
 grammars/*/src/parser.c
 grammars/*/src/tree_sitter/
