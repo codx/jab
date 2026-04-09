@@ -1,0 +1,196 @@
+#!/bin/sh
+# jabw — jab wrapper (like gradlew)
+# Checks for jab binary, downloads if missing, verifies checksum, runs it.
+# Commit this file to your repo so contributors don't need to install jab.
+set -eu
+
+JAB_VERSION="${JAB_VERSION:-0.1.0}"
+JAB_DIR="${JAB_DIR:-.jab}"
+JAB_BIN="${JAB_DIR}/jab"
+JAB_BASE_URL="${JAB_BASE_URL:-https://github.com/OWNER/jab/releases/download}"
+
+# --- Detect platform ---
+
+detect_platform() {
+    os="$(uname -s)"
+    arch="$(uname -m)"
+
+    case "$os" in
+        Linux)  os="linux" ;;
+        Darwin) os="darwin" ;;
+        MINGW*|MSYS*|CYGWIN*) os="windows" ;;
+        *) echo "jabw: unsupported OS: $os" >&2; exit 2 ;;
+    esac
+
+    case "$arch" in
+        x86_64|amd64)  arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *) echo "jabw: unsupported architecture: $arch" >&2; exit 2 ;;
+    esac
+
+    if [ "$os" = "windows" ]; then
+        echo "jab-${os}-${arch}.exe"
+    else
+        echo "jab-${os}-${arch}"
+    fi
+}
+
+# --- Checksum verification ---
+
+verify_checksum() {
+    file="$1"
+    expected="$2"
+
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual="$(sha256sum "$file" | cut -d' ' -f1)"
+    elif command -v shasum >/dev/null 2>&1; then
+        actual="$(shasum -a 256 "$file" | cut -d' ' -f1)"
+    else
+        echo "jabw: warning: no sha256sum or shasum found, skipping checksum verification" >&2
+        return 0
+    fi
+
+    if [ "$actual" != "$expected" ]; then
+        echo "jabw: checksum mismatch!" >&2
+        echo "  expected: $expected" >&2
+        echo "  actual:   $actual" >&2
+        rm -f "$file"
+        exit 2
+    fi
+}
+
+# --- Download ---
+
+download() {
+    url="$1"
+    dest="$2"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL -o "$dest" "$url"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$dest" "$url"
+    else
+        echo "jabw: curl or wget required to download jab" >&2
+        exit 2
+    fi
+}
+
+# --- Ensure binary exists ---
+
+ensure_jab() {
+    if [ -x "$JAB_BIN" ]; then
+        # Check version matches
+        current="$("$JAB_BIN" --version 2>/dev/null || echo "unknown")"
+        if echo "$current" | grep -q "$JAB_VERSION"; then
+            return 0
+        fi
+        echo "jabw: version mismatch (have $current, want $JAB_VERSION), re-downloading..." >&2
+    fi
+
+    artifact="$(detect_platform)"
+    url="${JAB_BASE_URL}/v${JAB_VERSION}/${artifact}"
+    checksums_url="${JAB_BASE_URL}/v${JAB_VERSION}/checksums.sha256"
+
+    echo "jabw: downloading jab v${JAB_VERSION} (${artifact})..." >&2
+
+    mkdir -p "$JAB_DIR"
+
+    # Download binary
+    download "$url" "$JAB_BIN"
+    chmod +x "$JAB_BIN"
+
+    # Download and verify checksum
+    checksums_file="${JAB_DIR}/checksums.sha256"
+    if download "$checksums_url" "$checksums_file" 2>/dev/null; then
+        expected="$(grep "$artifact" "$checksums_file" | cut -d' ' -f1)"
+        if [ -n "$expected" ]; then
+            verify_checksum "$JAB_BIN" "$expected"
+            echo "jabw: checksum verified" >&2
+        else
+            echo "jabw: warning: artifact not found in checksums file" >&2
+        fi
+        rm -f "$checksums_file"
+    else
+        echo "jabw: warning: could not download checksums, skipping verification" >&2
+    fi
+
+    echo "jabw: jab v${JAB_VERSION} ready" >&2
+}
+
+# --- Git hook installation ---
+
+install_hook() {
+    hook_type="${1:-pre-commit}"
+    git_dir="$(git rev-parse --git-dir 2>/dev/null)" || {
+        echo "jabw: not a git repository" >&2
+        exit 2
+    }
+
+    hook_file="${git_dir}/hooks/${hook_type}"
+    mkdir -p "${git_dir}/hooks"
+
+    if [ -f "$hook_file" ]; then
+        if grep -q "jabw" "$hook_file"; then
+            echo "jabw: ${hook_type} hook already installed" >&2
+            return 0
+        fi
+        echo "jabw: ${hook_type} hook already exists, appending..." >&2
+        printf '\n# jab pre-commit check\n./jabw --staged\n' >> "$hook_file"
+    else
+        cat > "$hook_file" <<'HOOK'
+#!/bin/sh
+# Installed by jabw
+./jabw --staged
+HOOK
+        chmod +x "$hook_file"
+    fi
+
+    echo "jabw: installed ${hook_type} hook" >&2
+}
+
+# --- Main ---
+
+case "${1:-}" in
+    --install-hook)
+        shift
+        install_hook "$@"
+        exit 0
+        ;;
+    --self-update)
+        rm -f "$JAB_BIN"
+        ensure_jab
+        exit 0
+        ;;
+    --wrapper-help)
+        cat <<'EOF'
+jabw — jab wrapper
+
+Downloads and caches the jab binary, then forwards all arguments.
+Commit jabw to your repo so contributors don't need a global install.
+
+Wrapper commands (not forwarded to jab):
+  --install-hook [type]   Install git hook (default: pre-commit)
+  --self-update           Re-download jab binary
+  --wrapper-help          Show this help
+
+Environment variables:
+  JAB_VERSION   Version to download (default: 0.1.0)
+  JAB_DIR       Cache directory (default: .jab)
+  JAB_BASE_URL  Download base URL (for mirrors/private hosting)
+
+Files:
+  .jab/jab     Cached binary (add .jab/ to .gitignore)
+  jabw          This wrapper (commit to repo)
+
+Usage:
+  ./jabw                 Check all files
+  ./jabw -f              Fix all files
+  ./jabw --staged        Check staged files
+  ./jabw --install-hook  Install pre-commit hook
+EOF
+        exit 0
+        ;;
+esac
+
+ensure_jab
+exec "$JAB_BIN" "$@"

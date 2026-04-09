@@ -1,0 +1,4 @@
+try:
+    risky()
+except:
+    pass

@@ -1,0 +1,5 @@
+name: test
+enabled: yes
+verbose: no
+active: on
+disabled: off

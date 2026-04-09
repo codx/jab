@@ -1,0 +1,10 @@
+.{
+    .name = .jab,
+    .version = "0.1.0",
+    .fingerprint = 0x655bcd76740e7daa,
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

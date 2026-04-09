@@ -1,3 +1,9 @@
 .zig-cache/
 zig-out/
 *.o
+
+dist/
+
+# Generated tree-sitter files
+grammars/*/src/parser.c
+grammars/*/src/tree_sitter/
