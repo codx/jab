@@ -6,6 +6,7 @@ dist/
 
 # Nix
 result
+.direnv/
 
 # Generated tree-sitter files
 grammars/*/src/parser.c

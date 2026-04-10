@@ -73,6 +73,13 @@
             zig
             shellcheck
             yamllint
+            opentofu
+            ruff
+            ty
+            hadolint
+            actionlint
+            taplo
+            nixfmt-rfc-style
           ];
 
           shellHook = ''

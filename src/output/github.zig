@@ -8,7 +8,7 @@ pub fn render(writer: *std.Io.Writer, path: []const u8, diags: []const Diagnosti
             path,
             d.line,
             d.col,
-            d.rule.name(),
+            d.displayName(),
             d.message,
         });
     }

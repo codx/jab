@@ -13,6 +13,7 @@ pub const RuleId = enum(u16) {
     JB0009 = 9, // Null bytes
     JB0010 = 10, // Smart quotes
     JB0011 = 11, // Invalid UTF-8
+    JB0012 = 12, // OS/editor junk file
 
     // Bash (JB1xxx)
     JB1001 = 1001,
@@ -38,6 +39,17 @@ pub const RuleId = enum(u16) {
     JB5001 = 5001,
     JB5002 = 5002,
 
+    // External tools (EXTxxxx) — only emitted with --ext
+    EXT_SHELLCHECK = 9001,
+    EXT_TOFU_FMT = 9002,
+    EXT_YAMLLINT = 9003,
+    EXT_RUFF = 9004,
+    EXT_TY = 9005,
+    EXT_HADOLINT = 9006,
+    EXT_ACTIONLINT = 9007,
+    EXT_TAPLO = 9008,
+    EXT_NIXFMT = 9009,
+
     pub fn code(self: RuleId) u16 {
         return @intFromEnum(self);
     }
@@ -55,6 +67,7 @@ pub const RuleId = enum(u16) {
             .JB0009 => "JB0009",
             .JB0010 => "JB0010",
             .JB0011 => "JB0011",
+            .JB0012 => "JB0012",
             .JB1001 => "JB1001",
             .JB1002 => "JB1002",
             .JB1003 => "JB1003",
@@ -69,6 +82,15 @@ pub const RuleId = enum(u16) {
             .JB4002 => "JB4002",
             .JB5001 => "JB5001",
             .JB5002 => "JB5002",
+            .EXT_SHELLCHECK => "shellcheck",
+            .EXT_TOFU_FMT => "tofu fmt",
+            .EXT_YAMLLINT => "yamllint",
+            .EXT_RUFF => "ruff",
+            .EXT_TY => "ty",
+            .EXT_HADOLINT => "hadolint",
+            .EXT_ACTIONLINT => "actionlint",
+            .EXT_TAPLO => "taplo",
+            .EXT_NIXFMT => "nixfmt",
         };
     }
 
@@ -85,6 +107,7 @@ pub const RuleId = enum(u16) {
             .JB0009 => "Null byte",
             .JB0010 => "Smart quote",
             .JB0011 => "Invalid UTF-8 sequence",
+            .JB0012 => "OS/editor junk file",
             .JB1001 => "Unquoted variable expansion",
             .JB1002 => "Unquoted command substitution",
             .JB1003 => "Legacy backtick syntax",
@@ -99,12 +122,21 @@ pub const RuleId = enum(u16) {
             .JB4002 => "Trailing comma",
             .JB5001 => "Ambiguous truthy string",
             .JB5002 => "Duplicate keys",
+            .EXT_SHELLCHECK => "shellcheck diagnostic",
+            .EXT_TOFU_FMT => "tofu fmt diagnostic",
+            .EXT_YAMLLINT => "yamllint diagnostic",
+            .EXT_RUFF => "ruff diagnostic",
+            .EXT_TY => "ty type error",
+            .EXT_HADOLINT => "hadolint diagnostic",
+            .EXT_ACTIONLINT => "actionlint diagnostic",
+            .EXT_TAPLO => "taplo fmt diagnostic",
+            .EXT_NIXFMT => "nixfmt diagnostic",
         };
     }
 
     pub fn category(self: RuleId) Category {
         return switch (self) {
-            .JB0001, .JB0007, .JB0008 => .format,
+            .JB0001, .JB0007, .JB0008, .EXT_TOFU_FMT, .EXT_TAPLO, .EXT_NIXFMT => .format,
             else => .lint,
         };
     }
@@ -112,7 +144,7 @@ pub const RuleId = enum(u16) {
     pub fn fixable(self: RuleId) bool {
         return switch (self) {
             .JB0001, .JB0002, .JB0003, .JB0004, .JB0005, .JB0007, .JB0008, .JB0010 => true,
-            .JB0006, .JB0009, .JB0011 => false,
+            .JB0006, .JB0009, .JB0011, .JB0012 => false,
             .JB1001, .JB1002, .JB1003, .JB1004, .JB1005 => true,
             .JB2001, .JB2002, .JB2003 => true,
             .JB3001 => true,
@@ -121,6 +153,15 @@ pub const RuleId = enum(u16) {
             .JB4002 => true,
             .JB5001 => true,
             .JB5002 => false,
+            .EXT_SHELLCHECK => true,
+            .EXT_TOFU_FMT => true,
+            .EXT_YAMLLINT => false,
+            .EXT_RUFF => true,
+            .EXT_TY => false,
+            .EXT_HADOLINT => false,
+            .EXT_ACTIONLINT => false,
+            .EXT_TAPLO => true,
+            .EXT_NIXFMT => true,
         };
     }
 };
@@ -137,6 +178,12 @@ pub const Diagnostic = struct {
     message: []const u8,
     suggestion: ?[]const u8 = null,
     span_len: u32 = 0,
+    /// When set, renderers use this instead of rule.name() (e.g. "SC2086")
+    display_name: ?[]const u8 = null,
+
+    pub fn displayName(self: Diagnostic) []const u8 {
+        return self.display_name orelse self.rule.name();
+    }
 };
 
 pub const DiagnosticList = struct {

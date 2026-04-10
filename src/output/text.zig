@@ -23,6 +23,10 @@ pub const Color = struct {
         return if (self.enabled) "\x1b[36m" else "";
     }
 
+    pub fn green(self: Color) []const u8 {
+        return if (self.enabled) "\x1b[32m" else "";
+    }
+
     pub fn dim(self: Color) []const u8 {
         return if (self.enabled) "\x1b[2m" else "";
     }
@@ -39,6 +43,13 @@ pub const Color = struct {
 };
 
 pub fn render(writer: *std.Io.Writer, path: []const u8, source: []const u8, diags: []const Diagnostic, color: Color) !void {
+    // Compute gutter width from max line number (minimum 3 for aesthetics)
+    var max_line: u32 = 0;
+    for (diags) |d| {
+        if (d.line > max_line) max_line = d.line;
+    }
+    const gutter = digitCount(max_line);
+
     for (diags) |d| {
         // path:line:col: error[BKxxxx] Message
         try writer.print("{s}{s}{s}:{d}:{d}: {s}error[{s}]{s} {s}\n", .{
@@ -48,18 +59,21 @@ pub fn render(writer: *std.Io.Writer, path: []const u8, source: []const u8, diag
             d.line,
             d.col,
             color.red(),
-            d.rule.name(),
+            d.displayName(),
             color.reset(),
             d.message,
         });
 
         const line_content = getLine(source, d.line);
         if (line_content.len > 0) {
-            try writer.print("{s}   \xe2\x94\x82{s}\n", .{ color.dim(), color.reset() });
-            try writer.print("{s}{d: >3} \xe2\x94\x82{s} {s}\n", .{ color.dim(), d.line, color.reset(), line_content });
+            try writeGutter(writer, gutter, color);
+            try writer.writeByte('\n');
+            try writeLineNum(writer, d.line, gutter, color);
+            try writer.print(" {s}\n", .{line_content});
 
             // Underline
-            try writer.print("{s}   \xe2\x94\x82{s} ", .{ color.dim(), color.reset() });
+            try writeGutter(writer, gutter, color);
+            try writer.writeByte(' ');
             var col: u32 = 1;
             while (col < d.col) : (col += 1) {
                 try writer.writeByte(' ');
@@ -74,9 +88,47 @@ pub fn render(writer: *std.Io.Writer, path: []const u8, source: []const u8, diag
                 try writer.print(" {s}", .{sug});
             }
             try writer.writeByte('\n');
-            try writer.print("{s}   \xe2\x94\x82{s}\n", .{ color.dim(), color.reset() });
+            try writeGutter(writer, gutter, color);
+            try writer.writeByte('\n');
         }
     }
+}
+
+/// Write gutter without trailing newline: "    │"
+fn writeGutter(writer: *std.Io.Writer, width: u16, color: Color) !void {
+    try writer.writeAll(color.dim());
+    var i: u16 = 0;
+    while (i < width) : (i += 1) {
+        try writer.writeByte(' ');
+    }
+    try writer.writeAll(" \xe2\x94\x82");
+    try writer.writeAll(color.reset());
+}
+
+/// Write a line number + gutter: " 42 │" right-aligned to width.
+fn writeLineNum(writer: *std.Io.Writer, line: u32, width: u16, color: Color) !void {
+    const num_digits = rawDigitCount(line);
+    try writer.writeAll(color.dim());
+    var pad: u16 = num_digits;
+    while (pad < width) : (pad += 1) {
+        try writer.writeByte(' ');
+    }
+    try writer.print("{d} \xe2\x94\x82", .{line});
+    try writer.writeAll(color.reset());
+}
+
+fn rawDigitCount(n: u32) u16 {
+    if (n == 0) return 1;
+    var count: u16 = 0;
+    var v = n;
+    while (v > 0) : (v /= 10) {
+        count += 1;
+    }
+    return count;
+}
+
+fn digitCount(n: u32) u16 {
+    return @max(rawDigitCount(n), 3); // minimum 3 for aesthetics
 }
 
 pub fn renderSummary(writer: *std.Io.Writer, total_errors: usize, total_files: usize, fixable: usize, color: Color) !void {
