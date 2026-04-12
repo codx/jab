@@ -11,6 +11,7 @@ const supported_extensions = [_][]const u8{
     ".sh",   ".bash",
     ".py",   ".pyi",
     ".tf",   ".tfvars", ".hcl", ".tofu",
+    ".md",
 };
 
 const max_file_size = 1024 * 1024; // 1MB
@@ -83,6 +84,6 @@ test "isSupportedFile" {
     try std.testing.expect(isSupportedFile("foo.json"));
     try std.testing.expect(isSupportedFile("bar.py"));
     try std.testing.expect(isSupportedFile("deploy.sh"));
-    try std.testing.expect(!isSupportedFile("readme.md"));
+    try std.testing.expect(isSupportedFile("readme.md"));
     try std.testing.expect(!isSupportedFile("Makefile"));
 }

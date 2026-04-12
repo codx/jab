@@ -213,11 +213,11 @@ pub fn runBatchedExternalTools(
 /// Returns the jab rule that covers the same issue, or null if no overlap.
 fn shellcheckOverlap(sc_code: u32) ?RuleId {
     return switch (sc_code) {
-        2086 => .JB1001, // Unquoted variable
-        2046 => .JB1002, // Unquoted command substitution
-        2006 => .JB1003, // Backtick syntax
-        2164 => .JB1004, // cd without || exit
-        2068 => .JB1005, // Unquoted $@
+        2086 => .bash_unquoted_var,
+        2046 => .bash_unquoted_cmd_sub,
+        2006 => .bash_backtick,
+        2164 => .bash_cd_no_check,
+        2068 => .bash_unquoted_at,
         else => null,
     };
 }
@@ -290,7 +290,7 @@ fn runShellcheck(
         const display = std.fmt.allocPrint(allocator, "SC{d}", .{code}) catch continue;
 
         try diags.append(allocator, .{
-            .rule = .EXT_SHELLCHECK,
+            .rule = .ext_shellcheck,
             .line = line,
             .col = col,
             .message = message,
@@ -321,7 +321,7 @@ fn runTofuFmt(
     // tofu fmt -check exits non-zero if file needs formatting
     // Report a single diagnostic per file
     try diags.append(allocator, .{
-        .rule = .EXT_TOFU_FMT,
+        .rule = .ext_tofu_fmt,
         .line = 1,
         .col = 1,
         .message = "File needs formatting (run: tofu fmt)",
@@ -332,11 +332,11 @@ fn runTofuFmt(
 /// Maps ruff rule codes to jab rules for deduplication.
 fn ruffOverlap(code: []const u8) ?RuleId {
     // E711: comparison to None
-    if (std.mem.eql(u8, code, "E711")) return .JB2002;
+    if (std.mem.eql(u8, code, "E711")) return .py_none_equality;
     // E712: comparison to True/False
-    if (std.mem.eql(u8, code, "E712")) return .JB2003;
+    if (std.mem.eql(u8, code, "E712")) return .py_bool_equality;
     // E722: bare except
-    if (std.mem.eql(u8, code, "E722")) return .JB2001;
+    if (std.mem.eql(u8, code, "E722")) return .py_bare_except;
     return null;
 }
 
@@ -400,7 +400,7 @@ fn runYamllint(
         } else "yamllint";
 
         try diags.append(allocator, .{
-            .rule = .EXT_YAMLLINT,
+            .rule = .ext_yamllint,
             .line = line,
             .col = col,
             .message = message,
@@ -480,7 +480,7 @@ fn runRuff(
         };
 
         try diags.append(allocator, .{
-            .rule = .EXT_RUFF,
+            .rule = .ext_ruff,
             .line = line,
             .col = col,
             .message = message,
@@ -576,7 +576,7 @@ fn runTy(
         };
 
         try diags.append(allocator, .{
-            .rule = .EXT_TY,
+            .rule = .ext_ty,
             .line = line,
             .col = col,
             .message = message,
@@ -643,7 +643,7 @@ fn runHadolint(
         };
 
         try diags.append(allocator, .{
-            .rule = .EXT_HADOLINT,
+            .rule = .ext_hadolint,
             .line = line,
             .col = col,
             .message = message,
@@ -715,7 +715,7 @@ fn runActionlint(
             @as([]const u8, "actionlint");
 
         try diags.append(allocator, .{
-            .rule = .EXT_ACTIONLINT,
+            .rule = .ext_actionlint,
             .line = line,
             .col = col,
             .message = message,
@@ -743,7 +743,7 @@ fn runTaploFmt(
     if (exit_code == 0) return;
 
     try diags.append(allocator, .{
-        .rule = .EXT_TAPLO,
+        .rule = .ext_taplo,
         .line = 1,
         .col = 1,
         .message = "File needs formatting (run: taplo fmt)",
@@ -770,7 +770,7 @@ fn runNixfmt(
     if (exit_code == 0) return;
 
     try diags.append(allocator, .{
-        .rule = .EXT_NIXFMT,
+        .rule = .ext_nixfmt,
         .line = 1,
         .col = 1,
         .message = "File needs formatting (run: nixfmt)",
@@ -862,7 +862,7 @@ fn batchShellcheck(
 
         const display = std.fmt.allocPrint(allocator, "SC{d}", .{code}) catch continue;
         try ctx.diags.append(allocator, .{
-            .rule = .EXT_SHELLCHECK,
+            .rule = .ext_shellcheck,
             .line = line,
             .col = col,
             .message = message,
@@ -914,7 +914,7 @@ fn batchYamllint(
         } else "yamllint";
 
         try ctx.diags.append(allocator, .{
-            .rule = .EXT_YAMLLINT,
+            .rule = .ext_yamllint,
             .line = file_and_rest.line,
             .col = file_and_rest.col,
             .message = file_and_rest.message,
@@ -1045,7 +1045,7 @@ fn batchRuff(
         };
 
         try ctx.diags.append(allocator, .{
-            .rule = .EXT_RUFF,
+            .rule = .ext_ruff,
             .line = line,
             .col = col,
             .message = message,
@@ -1151,7 +1151,7 @@ fn batchTy(
         };
 
         try ctx.diags.append(allocator, .{
-            .rule = .EXT_TY,
+            .rule = .ext_ty,
             .line = line,
             .col = col,
             .message = message,
@@ -1228,7 +1228,7 @@ fn batchHadolint(
         };
 
         try ctx.diags.append(allocator, .{
-            .rule = .EXT_HADOLINT,
+            .rule = .ext_hadolint,
             .line = line,
             .col = col,
             .message = message,
@@ -1310,7 +1310,7 @@ fn batchActionlint(
             @as([]const u8, "actionlint");
 
         try ctx.diags.append(allocator, .{
-            .rule = .EXT_ACTIONLINT,
+            .rule = .ext_actionlint,
             .line = line,
             .col = col,
             .message = message,
@@ -1511,8 +1511,8 @@ test "applyDiff basic" {
 }
 
 test "shellcheckOverlap" {
-    try std.testing.expectEqual(RuleId.JB1001, shellcheckOverlap(2086).?);
-    try std.testing.expectEqual(RuleId.JB1003, shellcheckOverlap(2006).?);
+    try std.testing.expectEqual(RuleId.bash_unquoted_var, shellcheckOverlap(2086).?);
+    try std.testing.expectEqual(RuleId.bash_backtick, shellcheckOverlap(2006).?);
     try std.testing.expectEqual(@as(?RuleId, null), shellcheckOverlap(1234));
 }
 
@@ -1569,7 +1569,7 @@ test "isNixFile" {
 }
 
 test "ruffOverlap" {
-    try std.testing.expectEqual(RuleId.JB2001, ruffOverlap("E722").?);
-    try std.testing.expectEqual(RuleId.JB2002, ruffOverlap("E711").?);
+    try std.testing.expectEqual(RuleId.py_bare_except, ruffOverlap("E722").?);
+    try std.testing.expectEqual(RuleId.py_none_equality, ruffOverlap("E711").?);
     try std.testing.expectEqual(@as(?RuleId, null), ruffOverlap("F401"));
 }

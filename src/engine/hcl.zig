@@ -109,7 +109,7 @@ fn checkInterpolationOnly(
     diags: *DiagnosticList,
     replacements: *std.ArrayList(Replacement),
 ) void {
-    if (skip.shouldSkip(.JB3001)) return;
+    if (skip.shouldSkip(.hcl_deprecated_interp)) return;
 
     const child_count = ts.nodeChildCount(node);
     if (child_count != 3) return;
@@ -139,7 +139,7 @@ fn checkInterpolationOnly(
     const qt_text = ts.nodeText(node, source);
     const point = ts.nodeStartPoint(node);
     diags.add(allocator, .{
-        .rule = .JB3001,
+        .rule = .hcl_deprecated_interp,
         .line = point.row + 1,
         .col = point.column + 1,
         .message = "Deprecated interpolation-only expression",
@@ -163,7 +163,7 @@ fn checkDuplicateBlockLabels(
     allocator: std.mem.Allocator,
     diags: *DiagnosticList,
 ) void {
-    if (skip.shouldSkip(.JB3002)) return;
+    if (skip.shouldSkip(.hcl_dup_labels)) return;
 
     const child_count = ts.nodeChildCount(node);
     var seen: [128]BlockId = undefined;
@@ -183,7 +183,7 @@ fn checkDuplicateBlockLabels(
             {
                 const point = ts.nodeStartPoint(child);
                 diags.add(allocator, .{
-                    .rule = .JB3002,
+                    .rule = .hcl_dup_labels,
                     .line = point.row + 1,
                     .col = point.column + 1,
                     .message = "Duplicate block labels",
@@ -275,7 +275,7 @@ test "JB3001 interpolation-only expression" {
     const result = fix(alloc, source, "test.tf", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB3001) found = true;
+        if (d.rule == .hcl_deprecated_interp) found = true;
     }
     try std.testing.expect(found);
 }
@@ -307,7 +307,7 @@ test "JB3002 duplicate block labels" {
     const result = fix(alloc, source, "test.tf", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB3002) found = true;
+        if (d.rule == .hcl_dup_labels) found = true;
     }
     try std.testing.expect(found);
 }

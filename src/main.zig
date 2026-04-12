@@ -54,7 +54,7 @@ pub fn main() !void {
                 \\Usage: jab [options] [files/dirs...]
                 \\
                 \\Options:
-                \\  -f               Fix and format files in-place
+                \\  -f, --fix        Fix and format files in-place
                 \\  --staged         Check only git-staged files (pre-commit mode)
                 \\  --ext            Also run external tools (shellcheck, yamllint, ruff, ty, tofu, hadolint, actionlint, taplo, nixfmt)
                 \\  --skip=<rules>   Skip rules or categories (comma-separated, e.g. JB1001,JB2)
@@ -114,7 +114,7 @@ pub fn main() !void {
             });
             try stdout.flush();
             return;
-        } else if (std.mem.eql(u8, arg, "-f")) {
+        } else if (std.mem.eql(u8, arg, "--fix") or std.mem.eql(u8, arg, "-f")) {
             fix_mode = true;
         } else if (std.mem.eql(u8, arg, "--staged")) {
             staged = true;
@@ -205,7 +205,7 @@ pub fn main() !void {
     var file_results: std.ArrayList(FileState) = .empty;
 
     // JB0012: Check for OS/editor junk files before walker filters them out
-    if (!skip.shouldSkip(.JB0012)) {
+    if (!skip.shouldSkip(.junk_file)) {
         const raw_paths = if (staged)
             file_paths
         else
@@ -214,7 +214,7 @@ pub fn main() !void {
             if (isJunkFile(path)) {
                 var diag_list: std.ArrayList(Diagnostic) = .empty;
                 try diag_list.append(allocator, .{
-                    .rule = .JB0012,
+                    .rule = .junk_file,
                     .line = 0,
                     .col = 0,
                     .message = if (containsJunkDir(path))
@@ -238,6 +238,18 @@ pub fn main() !void {
     for (file_paths) |path| {
         const source = std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024) catch continue;
 
+        var diag_list: std.ArrayList(Diagnostic) = .empty;
+
+        // JB0014: Large file warning (>512KB)
+        if (!skip.shouldSkip(.large_file) and source.len > 512 * 1024) {
+            try diag_list.append(allocator, .{
+                .rule = .large_file,
+                .line = 0,
+                .col = 0,
+                .message = "File exceeds 512KB",
+            });
+        }
+
         const universal_result = universal.scan(allocator, source, skip, !fix_mode);
         const engine_result = engine_mod.processFile(
             allocator,
@@ -247,8 +259,11 @@ pub fn main() !void {
             !fix_mode,
         );
 
-        var diag_list: std.ArrayList(Diagnostic) = .empty;
         for (universal_result.diagnostics) |d| {
+            try diag_list.append(allocator, d);
+        }
+        // JB0013: Secret detection
+        for (universal.scanSecrets(allocator, source, skip)) |d| {
             try diag_list.append(allocator, d);
         }
         if (engine_result) |er| {
@@ -393,6 +408,39 @@ fn isGitHubActions() bool {
     return std.mem.eql(u8, env, "true");
 }
 
+test "isJunkFile detects DS_Store" {
+    try std.testing.expect(isJunkFile(".DS_Store"));
+    try std.testing.expect(isJunkFile("subdir/.DS_Store"));
+}
+
+test "isJunkFile detects editor backups" {
+    try std.testing.expect(isJunkFile("file.txt~"));
+    try std.testing.expect(isJunkFile(".file.swp"));
+    try std.testing.expect(isJunkFile(".file.swo"));
+}
+
+test "isJunkFile detects resource fork files" {
+    try std.testing.expect(isJunkFile("._something"));
+}
+
+test "isJunkFile rejects normal files" {
+    try std.testing.expect(!isJunkFile("main.zig"));
+    try std.testing.expect(!isJunkFile("src/lib.py"));
+}
+
+test "containsJunkDir detects cache dirs" {
+    try std.testing.expect(containsJunkDir("src/__pycache__/foo.pyc"));
+    try std.testing.expect(containsJunkDir("node_modules/pkg/index.js"));
+    try std.testing.expect(containsJunkDir(".terraform/providers/foo"));
+    try std.testing.expect(containsJunkDir("proj/.zig-cache/o/test"));
+    try std.testing.expect(containsJunkDir("lib/foo.egg-info/PKG-INFO"));
+}
+
+test "containsJunkDir rejects normal paths" {
+    try std.testing.expect(!containsJunkDir("src/main.zig"));
+    try std.testing.expect(!containsJunkDir("terraform/main.tf"));
+}
+
 comptime {
     _ = @import("diagnostic.zig");
     _ = @import("indent.zig");
@@ -408,4 +456,7 @@ comptime {
     _ = @import("walker.zig");
     _ = @import("git.zig");
     _ = @import("output/json.zig");
+    _ = @import("output/text.zig");
+    _ = @import("output/github.zig");
+    _ = @import("engine/markdown.zig");
 }

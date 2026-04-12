@@ -110,7 +110,7 @@ fn checkBareExcept(
     diags: *DiagnosticList,
     replacements: *std.ArrayList(Replacement),
 ) void {
-    if (skip.shouldSkip(.JB2001)) return;
+    if (skip.shouldSkip(.py_bare_except)) return;
 
     const child_count = ts.nodeChildCount(node);
     var has_exception_type = false;
@@ -136,7 +136,7 @@ fn checkBareExcept(
 
         const point = ts.nodeStartPoint(node);
         diags.add(allocator, .{
-            .rule = .JB2001,
+            .rule = .py_bare_except,
             .line = point.row + 1,
             .col = point.column + 1,
             .message = "Bare except clause",
@@ -162,7 +162,7 @@ fn checkComparisonWithNone(
     diags: *DiagnosticList,
     replacements: *std.ArrayList(Replacement),
 ) void {
-    if (skip.shouldSkip(.JB2002)) return;
+    if (skip.shouldSkip(.py_none_equality)) return;
 
     const child_count = ts.nodeChildCount(node);
     if (child_count < 3) return;
@@ -189,7 +189,7 @@ fn checkComparisonWithNone(
         const point = ts.nodeStartPoint(op);
         const replacement_op: []const u8 = if (is_eq) "is" else "is not";
         diags.add(allocator, .{
-            .rule = .JB2002,
+            .rule = .py_none_equality,
             .line = point.row + 1,
             .col = point.column + 1,
             .message = if (is_eq) "Use 'is None' instead of '== None'" else "Use 'is not None' instead of '!= None'",
@@ -215,7 +215,7 @@ fn checkComparisonWithBool(
     diags: *DiagnosticList,
     _: *std.ArrayList(Replacement),
 ) void {
-    if (skip.shouldSkip(.JB2003)) return;
+    if (skip.shouldSkip(.py_bool_equality)) return;
 
     const child_count = ts.nodeChildCount(node);
     if (child_count < 3) return;
@@ -239,7 +239,7 @@ fn checkComparisonWithBool(
 
         const point = ts.nodeStartPoint(op);
         diags.add(allocator, .{
-            .rule = .JB2003,
+            .rule = .py_bool_equality,
             .line = point.row + 1,
             .col = point.column + 1,
             .message = "Comparison with True/False",
@@ -286,7 +286,7 @@ test "JB2001 bare except" {
     const result = fix(alloc, source, "test.py", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB2001) found = true;
+        if (d.rule == .py_bare_except) found = true;
     }
     try std.testing.expect(found);
 }
@@ -308,7 +308,7 @@ test "JB2002 equality with None" {
     const result = fix(alloc, source, "test.py", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB2002) found = true;
+        if (d.rule == .py_none_equality) found = true;
     }
     try std.testing.expect(found);
 }
@@ -330,7 +330,7 @@ test "JB2003 comparison with True" {
     const result = fix(alloc, source, "test.py", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB2003) found = true;
+        if (d.rule == .py_bool_equality) found = true;
     }
     try std.testing.expect(found);
 }

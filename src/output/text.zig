@@ -147,6 +147,34 @@ pub fn renderSummary(writer: *std.Io.Writer, total_errors: usize, total_files: u
     try writer.writeByte('\n');
 }
 
+test "rawDigitCount" {
+    try std.testing.expectEqual(@as(u16, 1), rawDigitCount(0));
+    try std.testing.expectEqual(@as(u16, 1), rawDigitCount(1));
+    try std.testing.expectEqual(@as(u16, 1), rawDigitCount(9));
+    try std.testing.expectEqual(@as(u16, 2), rawDigitCount(10));
+    try std.testing.expectEqual(@as(u16, 3), rawDigitCount(100));
+    try std.testing.expectEqual(@as(u16, 4), rawDigitCount(9999));
+}
+
+test "digitCount minimum 3" {
+    try std.testing.expectEqual(@as(u16, 3), digitCount(0));
+    try std.testing.expectEqual(@as(u16, 3), digitCount(1));
+    try std.testing.expectEqual(@as(u16, 3), digitCount(999));
+    try std.testing.expectEqual(@as(u16, 4), digitCount(1000));
+}
+
+test "getLine returns correct lines" {
+    const source = "line1\nline2\nline3";
+    try std.testing.expectEqualStrings("line1", getLine(source, 1));
+    try std.testing.expectEqualStrings("line2", getLine(source, 2));
+    try std.testing.expectEqualStrings("line3", getLine(source, 3));
+    try std.testing.expectEqualStrings("", getLine(source, 4));
+}
+
+test "getLine single line no newline" {
+    try std.testing.expectEqualStrings("hello", getLine("hello", 1));
+}
+
 fn getLine(source: []const u8, target_line: u32) []const u8 {
     var line: u32 = 1;
     var start: usize = 0;

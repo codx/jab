@@ -47,11 +47,11 @@ pub fn fix(
             if (indent > max_indent_seen) max_indent_seen = indent;
 
             if (parseKeyValue(line)) |kv| {
-                if (!skip.shouldSkip(.JB5002) and indent < 32) {
+                if (!skip.shouldSkip(.yaml_dup_keys) and indent < 32) {
                     if (key_tracker[indent].isDuplicate(kv.key)) {
                         const col: u32 = indent + 1;
                         diags.add(allocator, .{
-                            .rule = .JB5002,
+                            .rule = .yaml_dup_keys,
                             .line = line_num,
                             .col = col,
                             .message = "Duplicate key",
@@ -61,7 +61,7 @@ pub fn fix(
                     key_tracker[indent].add(allocator, kv.key);
                 }
 
-                if (!skip.shouldSkip(.JB5001)) {
+                if (!skip.shouldSkip(.yaml_truthy_string)) {
                     const val = std.mem.trim(u8, kv.value, " \t");
                     if (isTruthyWord(val)) {
                         const val_offset = line_start + (kv.value_offset);
@@ -69,7 +69,7 @@ pub fn fix(
                         const col: u32 = @intCast(trimmed_start - line_start + 1);
                         const replacement_text = truthyReplacement(val);
                         diags.add(allocator, .{
-                            .rule = .JB5001,
+                            .rule = .yaml_truthy_string,
                             .line = line_num,
                             .col = col,
                             .message = "Ambiguous truthy string",
@@ -239,7 +239,7 @@ test "JB5001 truthy string detection" {
     const source = "enabled: yes\nverbose: no\n";
     const result = fix(alloc, source, "test.yaml", SkipSet{}, true);
     try std.testing.expectEqual(@as(usize, 2), result.diagnostics.len);
-    try std.testing.expectEqual(RuleId.JB5001, result.diagnostics[0].rule);
+    try std.testing.expectEqual(RuleId.yaml_truthy_string, result.diagnostics[0].rule);
 }
 
 test "JB5001 fix replaces truthy" {
@@ -269,7 +269,7 @@ test "JB5002 duplicate keys" {
     const result = fix(alloc, source, "test.yaml", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB5002) found = true;
+        if (d.rule == .yaml_dup_keys) found = true;
     }
     try std.testing.expect(found);
 }

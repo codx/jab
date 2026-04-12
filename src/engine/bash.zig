@@ -138,10 +138,10 @@ fn checkUnquotedExpansion(
     if (text.len == 0) return;
 
     if (std.mem.eql(u8, text, "$@") or std.mem.eql(u8, text, "${@}")) {
-        if (skip.shouldSkip(.JB1005)) return;
+        if (skip.shouldSkip(.bash_unquoted_at)) return;
         const point = ts.nodeStartPoint(node);
         diags.add(allocator, .{
-            .rule = .JB1005,
+            .rule = .bash_unquoted_at,
             .line = point.row + 1,
             .col = point.column + 1,
             .message = "Unquoted $@",
@@ -155,10 +155,10 @@ fn checkUnquotedExpansion(
         return;
     }
 
-    if (skip.shouldSkip(.JB1001)) return;
+    if (skip.shouldSkip(.bash_unquoted_var)) return;
     const point = ts.nodeStartPoint(node);
     diags.add(allocator, .{
-        .rule = .JB1001,
+        .rule = .bash_unquoted_var,
         .line = point.row + 1,
         .col = point.column + 1,
         .message = "Unquoted variable expansion",
@@ -180,7 +180,7 @@ fn checkUnquotedCommandSub(
     diags: *DiagnosticList,
     replacements: *std.ArrayList(Replacement),
 ) void {
-    if (skip.shouldSkip(.JB1002)) return;
+    if (skip.shouldSkip(.bash_unquoted_cmd_sub)) return;
 
     const parent = ts.nodeParent(node);
     if (ts.nodeIsNull(parent)) return;
@@ -196,7 +196,7 @@ fn checkUnquotedCommandSub(
 
     const point = ts.nodeStartPoint(node);
     diags.add(allocator, .{
-        .rule = .JB1002,
+        .rule = .bash_unquoted_cmd_sub,
         .line = point.row + 1,
         .col = point.column + 1,
         .message = "Unquoted command substitution",
@@ -218,14 +218,14 @@ fn checkBacktickSyntax(
     diags: *DiagnosticList,
     replacements: *std.ArrayList(Replacement),
 ) void {
-    if (skip.shouldSkip(.JB1003)) return;
+    if (skip.shouldSkip(.bash_backtick)) return;
 
     const text = ts.nodeText(node, source);
     if (text.len == 0 or text[0] != '`') return;
 
     const point = ts.nodeStartPoint(node);
     diags.add(allocator, .{
-        .rule = .JB1003,
+        .rule = .bash_backtick,
         .line = point.row + 1,
         .col = point.column + 1,
         .message = "Legacy backtick syntax",
@@ -250,7 +250,7 @@ fn checkCdWithoutErrorHandling(
     diags: *DiagnosticList,
     _: *std.ArrayList(Replacement),
 ) void {
-    if (skip.shouldSkip(.JB1004)) return;
+    if (skip.shouldSkip(.bash_cd_no_check)) return;
 
     const child_count = ts.nodeChildCount(node);
     if (child_count == 0) return;
@@ -280,7 +280,7 @@ fn checkCdWithoutErrorHandling(
 
     const point = ts.nodeStartPoint(node);
     diags.add(allocator, .{
-        .rule = .JB1004,
+        .rule = .bash_cd_no_check,
         .line = point.row + 1,
         .col = point.column + 1,
         .message = "cd without error handling",
@@ -365,7 +365,7 @@ test "JB1003 backtick detection" {
     const result = fix(alloc, source, "test.sh", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB1003) found = true;
+        if (d.rule == .bash_backtick) found = true;
     }
     try std.testing.expect(found);
 }
@@ -378,7 +378,7 @@ test "JB1004 cd without error handling" {
     const result = fix(alloc, source, "test.sh", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB1004) found = true;
+        if (d.rule == .bash_cd_no_check) found = true;
     }
     try std.testing.expect(found);
 }
@@ -391,7 +391,7 @@ test "JB1004 cd with || exit is clean" {
     const result = fix(alloc, source, "test.sh", SkipSet{}, true);
     var found = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB1004) found = true;
+        if (d.rule == .bash_cd_no_check) found = true;
     }
     try std.testing.expect(!found);
 }

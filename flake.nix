@@ -21,18 +21,29 @@
           overlays = [ zig-overlay.overlays.default ];
         };
         zig = pkgs.zigpkgs."0.15.2";
-      in
-      {
-        packages.default = pkgs.stdenvNoCC.mkDerivation {
+
+        externalTools = with pkgs; [
+          shellcheck
+          yamllint
+          opentofu
+          ruff
+          ty
+          hadolint
+          actionlint
+          taplo
+          nixfmt-rfc-style
+        ];
+
+        mkJab = { withTools ? false }: pkgs.stdenvNoCC.mkDerivation {
           pname = "jab";
           version = "0.1.0";
 
           src = pkgs.lib.cleanSource ./.;
 
-          nativeBuildInputs = [ zig ];
+          nativeBuildInputs = [ zig ] ++ pkgs.lib.optionals withTools [ pkgs.makeWrapper ];
 
           dontConfigure = true;
-          dontFixup = true;
+          dontFixup = !withTools;
 
           postUnpack = ''
             # Nix source is read-only; copy grammar files that are
@@ -61,26 +72,25 @@
 
           installPhase = "true"; # zig build --prefix handles installation
 
+          postFixup = pkgs.lib.optionalString withTools ''
+            wrapProgram $out/bin/jab \
+              --prefix PATH : ${pkgs.lib.makeBinPath externalTools}
+          '';
+
           meta = with pkgs.lib; {
             description = "Single-binary linter, fixer, and formatter for bash, JSON, YAML, Python, and HCL";
             license = licenses.mit;
             mainProgram = "jab";
           };
         };
+      in
+      {
+        packages.default = mkJab { };
+        packages.jab = mkJab { };
+        packages.jab-full = mkJab { withTools = true; };
 
         devShells.default = pkgs.mkShell {
-          packages = with pkgs; [
-            zig
-            shellcheck
-            yamllint
-            opentofu
-            ruff
-            ty
-            hadolint
-            actionlint
-            taplo
-            nixfmt-rfc-style
-          ];
+          packages = [ zig ] ++ externalTools;
 
           shellHook = ''
             echo "jab dev shell — zig $(zig version)"

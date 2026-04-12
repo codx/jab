@@ -36,6 +36,21 @@ pub fn renderSummary(writer: *std.Io.Writer, total_errors: usize, total_files: u
     try writer.writeByte('\n');
 }
 
+test "writeJsonString escapes special chars" {
+    var buf: [256]u8 = undefined;
+    var w = std.Io.Writer.fixed(&buf);
+    try writeJsonString(&w, "hello \"world\"\nnew\\line\ttab");
+    const expected = "hello \\\"world\\\"\\nnew\\\\line\\ttab";
+    try std.testing.expectEqualStrings(expected, buf[0..expected.len]);
+}
+
+test "writeJsonString passthrough" {
+    var buf: [256]u8 = undefined;
+    var w = std.Io.Writer.fixed(&buf);
+    try writeJsonString(&w, "simple text");
+    try std.testing.expectEqualStrings("simple text", buf[0..11]);
+}
+
 fn writeJsonString(writer: *std.Io.Writer, s: []const u8) !void {
     for (s) |c| {
         switch (c) {

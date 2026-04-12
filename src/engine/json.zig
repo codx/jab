@@ -21,10 +21,10 @@ pub fn fix(
     const trailing_comma_positions = detectTrailingCommas(allocator, source);
     if (trailing_comma_positions.len > 0 and !is_jsonc) {
         for (trailing_comma_positions) |pos| {
-            if (!skip.shouldSkip(.JB4002)) {
+            if (!skip.shouldSkip(.json_trailing_comma)) {
                 const loc = lineCol(source, pos);
                 diags.add(allocator, .{
-                    .rule = .JB4002,
+                    .rule = .json_trailing_comma,
                     .line = loc.line,
                     .col = loc.col,
                     .message = "Trailing comma",
@@ -42,7 +42,7 @@ pub fn fix(
         source;
 
     // JB4001: Duplicate key detection via dual-parse
-    if (!skip.shouldSkip(.JB4001)) {
+    if (!skip.shouldSkip(.json_dup_keys)) {
         detectDuplicateKeys(allocator, clean_source, &diags);
     }
 
@@ -53,7 +53,7 @@ pub fn fix(
 
     if (!valid) {
         diags.add(allocator, .{
-            .rule = .JB4001,
+            .rule = .json_dup_keys,
             .line = 1,
             .col = 1,
             .message = "Invalid JSON syntax",
@@ -284,7 +284,7 @@ fn findDuplicateKeyPositions(allocator: std.mem.Allocator, source: []const u8, d
                     if (seen_keys[depth].isDuplicate(key)) {
                         const loc = lineCol(source, i);
                         diags.add(allocator, .{
-                            .rule = .JB4001,
+                            .rule = .json_dup_keys,
                             .line = loc.line,
                             .col = loc.col,
                             .message = "Duplicate key",
@@ -348,11 +348,11 @@ test "fix removes trailing commas" {
     const alloc = arena.allocator();
     const source = "{\"a\": 1, \"b\": 2,}";
     const result = fix(alloc, source, "test.json", SkipSet{}, false);
-    var found_bk4002 = false;
+    var found_trailing_comma = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB4002) found_bk4002 = true;
+        if (d.rule == .json_trailing_comma) found_trailing_comma = true;
     }
-    try std.testing.expect(found_bk4002);
+    try std.testing.expect(found_trailing_comma);
     try std.testing.expect(result.changed);
 }
 
@@ -373,7 +373,7 @@ test "detect duplicate keys" {
     const result = fix(alloc, source, "test.json", SkipSet{}, true);
     var found_dup = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB4001) found_dup = true;
+        if (d.rule == .json_dup_keys) found_dup = true;
     }
     try std.testing.expect(found_dup);
 }
@@ -394,9 +394,9 @@ test "jsonc allows trailing commas" {
     const alloc = arena.allocator();
     const source = "{\"a\": 1,}\n";
     const result = fix(alloc, source, "test.jsonc", SkipSet{}, true);
-    var found_bk4002 = false;
+    var found_trailing_comma = false;
     for (result.diagnostics) |d| {
-        if (d.rule == .JB4002) found_bk4002 = true;
+        if (d.rule == .json_trailing_comma) found_trailing_comma = true;
     }
-    try std.testing.expect(!found_bk4002);
+    try std.testing.expect(!found_trailing_comma);
 }

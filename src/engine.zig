@@ -17,6 +17,7 @@ pub const bash = @import("engine/bash.zig");
 pub const yaml = @import("engine/yaml.zig");
 pub const python = @import("engine/python.zig");
 pub const hcl = @import("engine/hcl.zig");
+pub const markdown = @import("engine/markdown.zig");
 
 pub const registry = [_]struct {
     extensions: []const []const u8,
@@ -42,6 +43,10 @@ pub const registry = [_]struct {
         .extensions = &.{ ".tf", ".tfvars", ".hcl", ".tofu" },
         .engine = hcl,
     },
+    .{
+        .extensions = &.{".md"},
+        .engine = markdown,
+    },
 };
 
 pub fn findEngine(path: []const u8) ?type {
@@ -53,6 +58,42 @@ pub fn findEngine(path: []const u8) ?type {
         }
     }
     return null;
+}
+
+test "findEngine matches json" {
+    try std.testing.expect(findEngine("foo.json") == json);
+    try std.testing.expect(findEngine("bar.jsonc") == json);
+}
+
+test "findEngine matches bash" {
+    try std.testing.expect(findEngine("script.sh") == bash);
+    try std.testing.expect(findEngine("run.bash") == bash);
+}
+
+test "findEngine matches yaml" {
+    try std.testing.expect(findEngine("config.yaml") == yaml);
+    try std.testing.expect(findEngine("config.yml") == yaml);
+}
+
+test "findEngine matches python" {
+    try std.testing.expect(findEngine("app.py") == python);
+    try std.testing.expect(findEngine("stubs.pyi") == python);
+}
+
+test "findEngine matches hcl" {
+    try std.testing.expect(findEngine("main.tf") == hcl);
+    try std.testing.expect(findEngine("vars.tfvars") == hcl);
+    try std.testing.expect(findEngine("config.hcl") == hcl);
+    try std.testing.expect(findEngine("main.tofu") == hcl);
+}
+
+test "findEngine matches markdown" {
+    try std.testing.expect(findEngine("readme.md") == markdown);
+}
+
+test "findEngine returns null for unknown" {
+    try std.testing.expect(findEngine("main.zig") == null);
+    try std.testing.expect(findEngine("Makefile") == null);
 }
 
 pub fn processFile(

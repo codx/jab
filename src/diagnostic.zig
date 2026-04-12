@@ -1,54 +1,61 @@
 const std = @import("std");
 
 pub const RuleId = enum(u16) {
-    // Universal (JB0xxx)
-    JB0001 = 1, // Trailing whitespace
-    JB0002 = 2, // UTF-8 BOM
-    JB0003 = 3, // Zero-width characters
-    JB0004 = 4, // Bidi overrides
-    JB0005 = 5, // Non-breaking space
-    JB0006 = 6, // Homoglyph characters
-    JB0007 = 7, // Missing trailing newline
-    JB0008 = 8, // Mixed line endings
-    JB0009 = 9, // Null bytes
-    JB0010 = 10, // Smart quotes
-    JB0011 = 11, // Invalid UTF-8
-    JB0012 = 12, // OS/editor junk file
+    // Universal
+    trailing_whitespace = 1,
+    utf8_bom = 2,
+    zero_width = 3,
+    bidi_override = 4,
+    nbsp = 5,
+    homoglyph = 6,
+    missing_newline = 7,
+    mixed_line_endings = 8,
+    null_byte = 9,
+    smart_quote = 10,
+    invalid_utf8 = 11,
+    junk_file = 12,
+    secret = 13,
+    large_file = 14,
 
-    // Bash (JB1xxx)
-    JB1001 = 1001,
-    JB1002 = 1002,
-    JB1003 = 1003,
-    JB1004 = 1004,
-    JB1005 = 1005,
+    // Bash
+    bash_unquoted_var = 1001,
+    bash_unquoted_cmd_sub = 1002,
+    bash_backtick = 1003,
+    bash_cd_no_check = 1004,
+    bash_unquoted_at = 1005,
 
-    // Python (JB2xxx)
-    JB2001 = 2001,
-    JB2002 = 2002,
-    JB2003 = 2003,
+    // Python
+    py_bare_except = 2001,
+    py_none_equality = 2002,
+    py_bool_equality = 2003,
 
-    // HCL (JB3xxx)
-    JB3001 = 3001,
-    JB3002 = 3002,
+    // HCL
+    hcl_deprecated_interp = 3001,
+    hcl_dup_labels = 3002,
 
-    // JSON (JB4xxx)
-    JB4001 = 4001,
-    JB4002 = 4002,
+    // JSON
+    json_dup_keys = 4001,
+    json_trailing_comma = 4002,
 
-    // YAML (JB5xxx)
-    JB5001 = 5001,
-    JB5002 = 5002,
+    // YAML
+    yaml_truthy_string = 5001,
+    yaml_dup_keys = 5002,
 
-    // External tools (EXTxxxx) — only emitted with --ext
-    EXT_SHELLCHECK = 9001,
-    EXT_TOFU_FMT = 9002,
-    EXT_YAMLLINT = 9003,
-    EXT_RUFF = 9004,
-    EXT_TY = 9005,
-    EXT_HADOLINT = 9006,
-    EXT_ACTIONLINT = 9007,
-    EXT_TAPLO = 9008,
-    EXT_NIXFMT = 9009,
+    // Markdown
+    md_heading_increment = 6001,
+    md_multiple_h1 = 6002,
+    md_no_empty_links = 6003,
+
+    // External tools (--ext only)
+    ext_shellcheck = 9001,
+    ext_tofu_fmt = 9002,
+    ext_yamllint = 9003,
+    ext_ruff = 9004,
+    ext_ty = 9005,
+    ext_hadolint = 9006,
+    ext_actionlint = 9007,
+    ext_taplo = 9008,
+    ext_nixfmt = 9009,
 
     pub fn code(self: RuleId) u16 {
         return @intFromEnum(self);
@@ -56,112 +63,134 @@ pub const RuleId = enum(u16) {
 
     pub fn name(self: RuleId) []const u8 {
         return switch (self) {
-            .JB0001 => "JB0001",
-            .JB0002 => "JB0002",
-            .JB0003 => "JB0003",
-            .JB0004 => "JB0004",
-            .JB0005 => "JB0005",
-            .JB0006 => "JB0006",
-            .JB0007 => "JB0007",
-            .JB0008 => "JB0008",
-            .JB0009 => "JB0009",
-            .JB0010 => "JB0010",
-            .JB0011 => "JB0011",
-            .JB0012 => "JB0012",
-            .JB1001 => "JB1001",
-            .JB1002 => "JB1002",
-            .JB1003 => "JB1003",
-            .JB1004 => "JB1004",
-            .JB1005 => "JB1005",
-            .JB2001 => "JB2001",
-            .JB2002 => "JB2002",
-            .JB2003 => "JB2003",
-            .JB3001 => "JB3001",
-            .JB3002 => "JB3002",
-            .JB4001 => "JB4001",
-            .JB4002 => "JB4002",
-            .JB5001 => "JB5001",
-            .JB5002 => "JB5002",
-            .EXT_SHELLCHECK => "shellcheck",
-            .EXT_TOFU_FMT => "tofu fmt",
-            .EXT_YAMLLINT => "yamllint",
-            .EXT_RUFF => "ruff",
-            .EXT_TY => "ty",
-            .EXT_HADOLINT => "hadolint",
-            .EXT_ACTIONLINT => "actionlint",
-            .EXT_TAPLO => "taplo",
-            .EXT_NIXFMT => "nixfmt",
+            .trailing_whitespace => "trailing-whitespace",
+            .utf8_bom => "utf8-bom",
+            .zero_width => "zero-width",
+            .bidi_override => "bidi-override",
+            .nbsp => "nbsp",
+            .homoglyph => "homoglyph",
+            .missing_newline => "missing-newline",
+            .mixed_line_endings => "mixed-line-endings",
+            .null_byte => "null-byte",
+            .smart_quote => "smart-quote",
+            .invalid_utf8 => "invalid-utf8",
+            .junk_file => "junk-file",
+            .secret => "secret",
+            .large_file => "large-file",
+            .bash_unquoted_var => "bash/unquoted-var",
+            .bash_unquoted_cmd_sub => "bash/unquoted-cmd-sub",
+            .bash_backtick => "bash/backtick",
+            .bash_cd_no_check => "bash/cd-no-check",
+            .bash_unquoted_at => "bash/unquoted-at",
+            .py_bare_except => "py/bare-except",
+            .py_none_equality => "py/none-equality",
+            .py_bool_equality => "py/bool-equality",
+            .hcl_deprecated_interp => "hcl/deprecated-interp",
+            .hcl_dup_labels => "hcl/dup-labels",
+            .json_dup_keys => "json/dup-keys",
+            .json_trailing_comma => "json/trailing-comma",
+            .yaml_truthy_string => "yaml/truthy-string",
+            .yaml_dup_keys => "yaml/dup-keys",
+            .md_heading_increment => "md/heading-increment",
+            .md_multiple_h1 => "md/multiple-h1",
+            .md_no_empty_links => "md/no-empty-links",
+            .ext_shellcheck => "shellcheck",
+            .ext_tofu_fmt => "tofu-fmt",
+            .ext_yamllint => "yamllint",
+            .ext_ruff => "ruff",
+            .ext_ty => "ty",
+            .ext_hadolint => "hadolint",
+            .ext_actionlint => "actionlint",
+            .ext_taplo => "taplo",
+            .ext_nixfmt => "nixfmt",
         };
+    }
+
+    pub fn fromName(s: []const u8) ?RuleId {
+        const fields = @typeInfo(RuleId).@"enum".fields;
+        inline for (fields) |f| {
+            const rule: RuleId = @enumFromInt(f.value);
+            if (std.mem.eql(u8, s, rule.name())) return rule;
+        }
+        return null;
     }
 
     pub fn description(self: RuleId) []const u8 {
         return switch (self) {
-            .JB0001 => "Trailing whitespace",
-            .JB0002 => "UTF-8 BOM",
-            .JB0003 => "Zero-width character",
-            .JB0004 => "Bidi override character",
-            .JB0005 => "Non-breaking space",
-            .JB0006 => "Homoglyph character",
-            .JB0007 => "Missing trailing newline",
-            .JB0008 => "Mixed line endings",
-            .JB0009 => "Null byte",
-            .JB0010 => "Smart quote",
-            .JB0011 => "Invalid UTF-8 sequence",
-            .JB0012 => "OS/editor junk file",
-            .JB1001 => "Unquoted variable expansion",
-            .JB1002 => "Unquoted command substitution",
-            .JB1003 => "Legacy backtick syntax",
-            .JB1004 => "cd without error handling",
-            .JB1005 => "Unquoted $@",
-            .JB2001 => "Bare except clause",
-            .JB2002 => "Equality comparison with None",
-            .JB2003 => "Equality comparison with True/False",
-            .JB3001 => "Deprecated interpolation-only expression",
-            .JB3002 => "Duplicate block labels",
-            .JB4001 => "Duplicate keys",
-            .JB4002 => "Trailing comma",
-            .JB5001 => "Ambiguous truthy string",
-            .JB5002 => "Duplicate keys",
-            .EXT_SHELLCHECK => "shellcheck diagnostic",
-            .EXT_TOFU_FMT => "tofu fmt diagnostic",
-            .EXT_YAMLLINT => "yamllint diagnostic",
-            .EXT_RUFF => "ruff diagnostic",
-            .EXT_TY => "ty type error",
-            .EXT_HADOLINT => "hadolint diagnostic",
-            .EXT_ACTIONLINT => "actionlint diagnostic",
-            .EXT_TAPLO => "taplo fmt diagnostic",
-            .EXT_NIXFMT => "nixfmt diagnostic",
+            .trailing_whitespace => "Trailing whitespace",
+            .utf8_bom => "UTF-8 BOM",
+            .zero_width => "Zero-width character",
+            .bidi_override => "Bidi override character",
+            .nbsp => "Non-breaking space",
+            .homoglyph => "Homoglyph character",
+            .missing_newline => "Missing trailing newline",
+            .mixed_line_endings => "Mixed line endings",
+            .null_byte => "Null byte",
+            .smart_quote => "Smart quote",
+            .invalid_utf8 => "Invalid UTF-8 sequence",
+            .junk_file => "OS/editor junk file",
+            .secret => "Possible secret/credential",
+            .large_file => "Large file",
+            .bash_unquoted_var => "Unquoted variable expansion",
+            .bash_unquoted_cmd_sub => "Unquoted command substitution",
+            .bash_backtick => "Legacy backtick syntax",
+            .bash_cd_no_check => "cd without error handling",
+            .bash_unquoted_at => "Unquoted $@",
+            .py_bare_except => "Bare except clause",
+            .py_none_equality => "Equality comparison with None",
+            .py_bool_equality => "Equality comparison with True/False",
+            .hcl_deprecated_interp => "Deprecated interpolation-only expression",
+            .hcl_dup_labels => "Duplicate block labels",
+            .json_dup_keys => "Duplicate keys",
+            .json_trailing_comma => "Trailing comma",
+            .yaml_truthy_string => "Ambiguous truthy string",
+            .yaml_dup_keys => "Duplicate keys",
+            .md_heading_increment => "Heading level skipped",
+            .md_multiple_h1 => "Multiple top-level headings",
+            .md_no_empty_links => "Empty link destination",
+            .ext_shellcheck => "shellcheck diagnostic",
+            .ext_tofu_fmt => "tofu fmt diagnostic",
+            .ext_yamllint => "yamllint diagnostic",
+            .ext_ruff => "ruff diagnostic",
+            .ext_ty => "ty type error",
+            .ext_hadolint => "hadolint diagnostic",
+            .ext_actionlint => "actionlint diagnostic",
+            .ext_taplo => "taplo fmt diagnostic",
+            .ext_nixfmt => "nixfmt diagnostic",
         };
     }
 
     pub fn category(self: RuleId) Category {
         return switch (self) {
-            .JB0001, .JB0007, .JB0008, .EXT_TOFU_FMT, .EXT_TAPLO, .EXT_NIXFMT => .format,
+            .trailing_whitespace, .missing_newline, .mixed_line_endings, .ext_tofu_fmt, .ext_taplo, .ext_nixfmt => .format,
             else => .lint,
         };
     }
 
     pub fn fixable(self: RuleId) bool {
         return switch (self) {
-            .JB0001, .JB0002, .JB0003, .JB0004, .JB0005, .JB0007, .JB0008, .JB0010 => true,
-            .JB0006, .JB0009, .JB0011, .JB0012 => false,
-            .JB1001, .JB1002, .JB1003, .JB1004, .JB1005 => true,
-            .JB2001, .JB2002, .JB2003 => true,
-            .JB3001 => true,
-            .JB3002 => false,
-            .JB4001 => false,
-            .JB4002 => true,
-            .JB5001 => true,
-            .JB5002 => false,
-            .EXT_SHELLCHECK => true,
-            .EXT_TOFU_FMT => true,
-            .EXT_YAMLLINT => false,
-            .EXT_RUFF => true,
-            .EXT_TY => false,
-            .EXT_HADOLINT => false,
-            .EXT_ACTIONLINT => false,
-            .EXT_TAPLO => true,
-            .EXT_NIXFMT => true,
+            .trailing_whitespace, .utf8_bom, .zero_width, .bidi_override, .nbsp, .missing_newline, .mixed_line_endings, .smart_quote => true,
+            .homoglyph, .null_byte, .invalid_utf8, .junk_file, .secret, .large_file => false,
+            .bash_unquoted_var, .bash_unquoted_cmd_sub, .bash_backtick, .bash_cd_no_check, .bash_unquoted_at => true,
+            .py_bare_except, .py_none_equality, .py_bool_equality => true,
+            .hcl_deprecated_interp => true,
+            .hcl_dup_labels => false,
+            .json_dup_keys => false,
+            .json_trailing_comma => true,
+            .yaml_truthy_string => true,
+            .yaml_dup_keys => false,
+            .md_heading_increment => false,
+            .md_multiple_h1 => false,
+            .md_no_empty_links => false,
+            .ext_shellcheck => true,
+            .ext_tofu_fmt => true,
+            .ext_yamllint => false,
+            .ext_ruff => true,
+            .ext_ty => false,
+            .ext_hadolint => false,
+            .ext_actionlint => false,
+            .ext_taplo => true,
+            .ext_nixfmt => true,
         };
     }
 };
@@ -210,16 +239,35 @@ pub const DiagnosticList = struct {
     }
 };
 
+/// Groups for --skip: "bash", "py", "hcl", "json", "yaml", "md", "ext"
+const GroupRange = struct { lo: u16, hi: u16 };
+const skip_groups = [_]struct { name: []const u8, range: GroupRange }{
+    .{ .name = "bash", .range = .{ .lo = 1001, .hi = 1999 } },
+    .{ .name = "py", .range = .{ .lo = 2001, .hi = 2999 } },
+    .{ .name = "hcl", .range = .{ .lo = 3001, .hi = 3999 } },
+    .{ .name = "json", .range = .{ .lo = 4001, .hi = 4999 } },
+    .{ .name = "yaml", .range = .{ .lo = 5001, .hi = 5999 } },
+    .{ .name = "md", .range = .{ .lo = 6001, .hi = 6999 } },
+    .{ .name = "ext", .range = .{ .lo = 9001, .hi = 9999 } },
+};
+
 pub const SkipSet = struct {
     skip_lint: bool = false,
     skip_format: bool = false,
     rule_codes: [32]u16 = [_]u16{0} ** 32,
     rule_count: u8 = 0,
+    group_mask: u8 = 0, // bit per group in skip_groups
 
     pub fn shouldSkip(self: SkipSet, rule: RuleId) bool {
         if (self.skip_lint and rule.category() == .lint) return true;
         if (self.skip_format and rule.category() == .format) return true;
         const c = rule.code();
+        // Check group skips
+        inline for (skip_groups, 0..) |g, i| {
+            if (self.group_mask & (@as(u8, 1) << @intCast(i)) != 0) {
+                if (c >= g.range.lo and c <= g.range.hi) return true;
+            }
+        }
         for (self.rule_codes[0..self.rule_count]) |rc| {
             if (rc == c) return true;
         }
@@ -241,12 +289,24 @@ pub const SkipSet = struct {
             if (trimmed.len == 0) continue;
             if (std.mem.eql(u8, trimmed, "lint")) {
                 set.skip_lint = true;
-            } else if (std.mem.eql(u8, trimmed, "format")) {
+                continue;
+            }
+            if (std.mem.eql(u8, trimmed, "format")) {
                 set.skip_format = true;
-            } else if (trimmed.len >= 3 and std.mem.startsWith(u8, trimmed, "JB")) {
-                if (std.fmt.parseInt(u16, trimmed[2..], 10)) |c| {
-                    set.addRule(c);
-                } else |_| {}
+                continue;
+            }
+            // Check group names (bash, py, hcl, json, yaml, ext)
+            var matched_group = false;
+            inline for (skip_groups, 0..) |g, i| {
+                if (std.mem.eql(u8, trimmed, g.name)) {
+                    set.group_mask |= @as(u8, 1) << @intCast(i);
+                    matched_group = true;
+                }
+            }
+            if (matched_group) continue;
+            // Try rule name lookup
+            if (RuleId.fromName(trimmed)) |rule| {
+                set.addRule(rule.code());
             }
         }
         return set;
@@ -260,18 +320,32 @@ pub const FixResult = struct {
 };
 
 test "RuleId basics" {
-    const rule = RuleId.JB0001;
+    const rule = RuleId.trailing_whitespace;
     try std.testing.expectEqual(@as(u16, 1), rule.code());
-    try std.testing.expectEqualStrings("JB0001", rule.name());
+    try std.testing.expectEqualStrings("trailing-whitespace", rule.name());
     try std.testing.expectEqual(Category.format, rule.category());
     try std.testing.expect(rule.fixable());
 }
 
-test "SkipSet parse" {
-    const set = SkipSet.parse("lint,JB0001");
+test "RuleId fromName" {
+    try std.testing.expectEqual(RuleId.secret, RuleId.fromName("secret").?);
+    try std.testing.expectEqual(RuleId.bash_backtick, RuleId.fromName("bash/backtick").?);
+    try std.testing.expectEqual(@as(?RuleId, null), RuleId.fromName("nonexistent"));
+}
+
+test "SkipSet parse names" {
+    const set = SkipSet.parse("lint,trailing-whitespace");
     try std.testing.expect(set.skip_lint);
     try std.testing.expect(!set.skip_format);
-    try std.testing.expect(set.shouldSkip(RuleId.JB0001));
-    try std.testing.expect(set.shouldSkip(RuleId.JB4001));
-    try std.testing.expect(!set.shouldSkip(RuleId.JB0007));
+    try std.testing.expect(set.shouldSkip(RuleId.trailing_whitespace));
+    try std.testing.expect(set.shouldSkip(RuleId.json_dup_keys)); // lint category
+    try std.testing.expect(!set.shouldSkip(RuleId.missing_newline)); // format, not skipped
+}
+
+test "SkipSet parse group" {
+    const set = SkipSet.parse("bash");
+    try std.testing.expect(set.shouldSkip(RuleId.bash_unquoted_var));
+    try std.testing.expect(set.shouldSkip(RuleId.bash_backtick));
+    try std.testing.expect(!set.shouldSkip(RuleId.py_bare_except));
+    try std.testing.expect(!set.shouldSkip(RuleId.trailing_whitespace));
 }
