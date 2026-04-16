@@ -20,6 +20,7 @@ Options:
   -f                 Fix + format in-place (default: check only)
   --staged           Only git-staged files
   --skip=<rules>     Comma-separated rules (JBxxxx) or categories (lint, format)
+  --ignore=<pat>     Ignore files matching pattern (glob, repeatable)
   --version          Print version and exit
 
 Exit codes:
@@ -93,6 +94,41 @@ jab --skip=JB1001,JB0001     # skip specific rules
 |------|-------------|---------|
 | JB5001 | Ambiguous truthy strings (yes/no/on/off) | Yes |
 | JB5002 | Duplicate keys | No |
+
+## Inline Suppression
+
+Disable rules on specific lines with `jab:disable` in a comment:
+
+```python
+x == None  # jab:disable none-equality
+```
+
+```python
+# jab:disable none-equality
+x == None
+```
+
+```yaml
+# jab:disable truthy-string
+enabled: yes
+```
+
+```markdown
+<!-- jab:disable heading-increment -->
+### Skipped heading
+```
+
+Use `jab:disable` with no arguments to suppress all rules on that line.
+
+## Ignoring Files
+
+Use `--ignore` to exclude files by pattern (repeatable):
+
+```sh
+jab --ignore=vendor --ignore='*.generated.py'
+```
+
+jab also respects `.gitignore` patterns automatically.
 
 ## Pre-commit Hook
 

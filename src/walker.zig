@@ -28,7 +28,7 @@ pub fn collectFiles(
             if (stat.kind == .directory) {
                 try walkDir(allocator, p, &files);
             } else {
-                if (isSupportedFile(p) and stat.size <= max_file_size) {
+                if (stat.size <= max_file_size) {
                     try files.append(allocator, .{ .path = p, .rel_path = p });
                 }
             }

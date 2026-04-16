@@ -5,6 +5,7 @@ const engine_mod = @import("engine.zig");
 const walker = @import("walker.zig");
 const git = @import("git.zig");
 const external = @import("external.zig");
+const suppress = @import("suppress.zig");
 const text_output = @import("output/text.zig");
 const github_output = @import("output/github.zig");
 const json_output = @import("output/json.zig");
@@ -33,6 +34,7 @@ pub fn main() !void {
     var format: ?Format = null;
     var skip = SkipSet{};
     var explicit_files: std.ArrayList([]const u8) = .empty;
+    var ignore_patterns: std.ArrayList([]const u8) = .empty;
 
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
@@ -58,6 +60,7 @@ pub fn main() !void {
                 \\  --staged         Check only git-staged files (pre-commit mode)
                 \\  --ext            Also run external tools (shellcheck, yamllint, ruff, ty, tofu, hadolint, actionlint, taplo, nixfmt)
                 \\  --skip=<rules>   Skip rules or categories (comma-separated, e.g. JB1001,JB2)
+                \\  --ignore=<pat>   Ignore files matching pattern (glob, repeatable)
                 \\  --format=<fmt>   Output format: text (default), json, github
                 \\  --health         Check which external tools are available on $PATH
                 \\  --version        Print version
@@ -138,6 +141,8 @@ pub fn main() !void {
             }
         } else if (std.mem.startsWith(u8, arg, "--skip=")) {
             skip = SkipSet.parse(arg[7..]);
+        } else if (std.mem.startsWith(u8, arg, "--ignore=")) {
+            try ignore_patterns.append(allocator, arg[9..]);
         } else if (arg.len > 0 and arg[0] != '-') {
             try explicit_files.append(allocator, arg);
         } else {
@@ -180,6 +185,20 @@ pub fn main() !void {
             try paths.append(allocator, e.path);
         }
         file_paths = paths.items;
+    }
+
+    // Load .gitignore patterns
+    loadGitignore(allocator, &ignore_patterns);
+
+    // Filter out ignored files
+    if (ignore_patterns.items.len > 0) {
+        var filtered: std.ArrayList([]const u8) = .empty;
+        for (file_paths) |path| {
+            if (!matchesAnyIgnore(path, ignore_patterns.items)) {
+                try filtered.append(allocator, path);
+            }
+        }
+        file_paths = filtered.items;
     }
 
     // Detect available external tools once (avoids repeated PATH lookups per file)
@@ -294,6 +313,18 @@ pub fn main() !void {
     var files_with_errors: usize = 0;
 
     for (file_results.items) |*fr| {
+        // Filter out inline-suppressed diagnostics
+        const suppressions = suppress.parse(allocator, fr.source);
+        if (suppressions.entries.len > 0) {
+            var kept: std.ArrayList(Diagnostic) = .empty;
+            for (fr.diags.items) |d| {
+                if (!suppressions.isSuppressed(d.line, d.rule)) {
+                    kept.append(allocator, d) catch {};
+                }
+            }
+            fr.diags = kept;
+        }
+
         // Sort by line, then col
         std.mem.sortUnstable(Diagnostic, fr.diags.items, {}, struct {
             fn lessThan(_: void, a: Diagnostic, b_diag: Diagnostic) bool {
@@ -441,12 +472,109 @@ test "containsJunkDir rejects normal paths" {
     try std.testing.expect(!containsJunkDir("terraform/main.tf"));
 }
 
+fn loadGitignore(allocator: std.mem.Allocator, patterns: *std.ArrayList([]const u8)) void {
+    const content = std.fs.cwd().readFileAlloc(allocator, ".gitignore", 64 * 1024) catch return;
+    var iter = std.mem.splitScalar(u8, content, '\n');
+    while (iter.next()) |raw_line| {
+        const line = std.mem.trim(u8, raw_line, " \t\r");
+        if (line.len == 0) continue;
+        if (line[0] == '#') continue;
+        // Strip trailing slash (directory marker) — we match against file paths
+        const pat = std.mem.trimRight(u8, line, "/");
+        if (pat.len == 0) continue;
+        patterns.append(allocator, pat) catch {};
+    }
+}
+
+fn matchesAnyIgnore(path: []const u8, patterns: []const []const u8) bool {
+    for (patterns) |pat| {
+        if (matchGlob(path, pat)) return true;
+    }
+    return false;
+}
+
+/// Simple glob match: `*` matches any sequence of non-`/` characters,
+/// `**` matches any sequence including `/`. Literal characters match exactly.
+fn matchGlob(str: []const u8, pattern: []const u8) bool {
+    // Check if pattern appears as a substring for simple directory patterns like "vendor"
+    if (std.mem.indexOf(u8, pattern, "*") == null) {
+        // No wildcards: match if path contains the pattern as a component
+        // e.g., "vendor" matches "vendor/foo.zig" and "src/vendor/bar.zig"
+        if (std.mem.eql(u8, str, pattern)) return true;
+        if (std.mem.startsWith(u8, str, pattern) and pattern.len < str.len and str[pattern.len] == '/') return true;
+        if (std.mem.indexOf(u8, str, pattern)) |idx| {
+            // Check it's a path component boundary
+            const before_ok = idx == 0 or str[idx - 1] == '/';
+            const after_end = idx + pattern.len;
+            const after_ok = after_end == str.len or str[after_end] == '/';
+            if (before_ok and after_ok) return true;
+        }
+        return false;
+    }
+    return globMatch(str, 0, pattern, 0);
+}
+
+fn globMatch(str: []const u8, si: usize, pat: []const u8, pi: usize) bool {
+    var s = si;
+    var p = pi;
+    while (p < pat.len) {
+        if (pat[p] == '*') {
+            // Check for **
+            if (p + 1 < pat.len and pat[p + 1] == '*') {
+                p += 2;
+                // Skip trailing /
+                if (p < pat.len and pat[p] == '/') p += 1;
+                // ** matches everything including /
+                var i = s;
+                while (i <= str.len) : (i += 1) {
+                    if (globMatch(str, i, pat, p)) return true;
+                }
+                return false;
+            }
+            // Single * matches non-/
+            p += 1;
+            var i = s;
+            while (i <= str.len) : (i += 1) {
+                if (globMatch(str, i, pat, p)) return true;
+                if (i < str.len and str[i] == '/') break;
+            }
+            return false;
+        }
+        if (s >= str.len) return false;
+        if (pat[p] != str[s]) return false;
+        p += 1;
+        s += 1;
+    }
+    return s == str.len;
+}
+
+test "matchGlob basic" {
+    try std.testing.expect(matchGlob("vendor/foo.zig", "vendor"));
+    try std.testing.expect(matchGlob("src/vendor/bar.zig", "vendor"));
+    try std.testing.expect(!matchGlob("src/vendorx/bar.zig", "vendor"));
+}
+
+test "matchGlob wildcard" {
+    try std.testing.expect(matchGlob("test.json", "*.json"));
+    try std.testing.expect(!matchGlob("test.yaml", "*.json"));
+    try std.testing.expect(matchGlob("src/foo/bar.py", "**/*.py"));
+    try std.testing.expect(matchGlob("bar.py", "**/*.py"));
+}
+
+test "matchesAnyIgnore" {
+    const patterns = &[_][]const u8{ "vendor", "*.md" };
+    try std.testing.expect(matchesAnyIgnore("vendor/lib.zig", patterns));
+    try std.testing.expect(matchesAnyIgnore("README.md", patterns));
+    try std.testing.expect(!matchesAnyIgnore("src/main.zig", patterns));
+}
+
 comptime {
     _ = @import("diagnostic.zig");
     _ = @import("indent.zig");
     _ = @import("universal.zig");
     _ = @import("engine.zig");
     _ = @import("external.zig");
+    _ = @import("suppress.zig");
     _ = @import("engine/json.zig");
     _ = @import("engine/bash.zig");
     _ = @import("engine/yaml.zig");
