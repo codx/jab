@@ -1,0 +1,12 @@
+[package]
+name = "jab"
+version = "0.1.0"
+
+[dependencies]
+zig = "0.15.0"
+
+[[products]]
+name = "first"
+
+[[products]]
+name = "second"

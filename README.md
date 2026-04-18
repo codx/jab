@@ -65,6 +65,11 @@ jab --skip=JB1001,JB0001     # skip specific rules
 | JB1003 | Legacy backtick syntax | Yes |
 | JB1004 | cd without error handling | No |
 | JB1005 | Unquoted `$@` | Yes |
+| JB1006 | `read` without `-r` (SC2162) | No |
+| JB1007 | `local x=$(cmd)` masks return value (SC2155) | No |
+| JB1008 | `==` in `[ ]` test, not POSIX (SC2039) | Yes |
+| JB1009 | `$?` comparison instead of direct `if` (SC2181) | No |
+| JB1010 | `-a`/`-o` in `[ ]` test, not POSIX (SC2166) | No |
 
 ### Python (.py, .pyi)
 
@@ -94,6 +99,21 @@ jab --skip=JB1001,JB0001     # skip specific rules
 |------|-------------|---------|
 | JB5001 | Ambiguous truthy strings (yes/no/on/off) | Yes |
 | JB5002 | Duplicate keys | No |
+
+### Markdown (.md)
+
+| Rule | Description | Fixable |
+|------|-------------|---------|
+| JB6001 | Heading level skipped | No |
+| JB6002 | Multiple top-level headings | No |
+| JB6003 | Empty link destination `[text]()` | No |
+
+### TOML (.toml)
+
+| Rule | Description | Fixable |
+|------|-------------|---------|
+| JB7001 | Duplicate keys (same table) | No |
+| JB7002 | Duplicate table headers | No |
 
 ## Inline Suppression
 

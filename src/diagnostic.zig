@@ -23,6 +23,11 @@ pub const RuleId = enum(u16) {
     bash_backtick = 1003,
     bash_cd_no_check = 1004,
     bash_unquoted_at = 1005,
+    bash_read_no_r = 1006,
+    bash_local_mask_return = 1007,
+    bash_test_double_eq = 1008,
+    bash_dollar_question = 1009,
+    bash_test_and_or = 1010,
 
     // Python
     py_bare_except = 2001,
@@ -40,6 +45,10 @@ pub const RuleId = enum(u16) {
     // YAML
     yaml_truthy_string = 5001,
     yaml_dup_keys = 5002,
+
+    // TOML
+    toml_dup_keys = 7001,
+    toml_dup_table = 7002,
 
     // Markdown
     md_heading_increment = 6001,
@@ -82,6 +91,11 @@ pub const RuleId = enum(u16) {
             .bash_backtick => "bash/backtick",
             .bash_cd_no_check => "bash/cd-no-check",
             .bash_unquoted_at => "bash/unquoted-at",
+            .bash_read_no_r => "bash/read-no-r",
+            .bash_local_mask_return => "bash/local-mask-return",
+            .bash_test_double_eq => "bash/test-double-eq",
+            .bash_dollar_question => "bash/dollar-question",
+            .bash_test_and_or => "bash/test-and-or",
             .py_bare_except => "py/bare-except",
             .py_none_equality => "py/none-equality",
             .py_bool_equality => "py/bool-equality",
@@ -91,6 +105,8 @@ pub const RuleId = enum(u16) {
             .json_trailing_comma => "json/trailing-comma",
             .yaml_truthy_string => "yaml/truthy-string",
             .yaml_dup_keys => "yaml/dup-keys",
+            .toml_dup_keys => "toml/dup-keys",
+            .toml_dup_table => "toml/dup-table",
             .md_heading_increment => "md/heading-increment",
             .md_multiple_h1 => "md/multiple-h1",
             .md_no_empty_links => "md/no-empty-links",
@@ -136,6 +152,11 @@ pub const RuleId = enum(u16) {
             .bash_backtick => "Legacy backtick syntax",
             .bash_cd_no_check => "cd without error handling",
             .bash_unquoted_at => "Unquoted $@",
+            .bash_read_no_r => "read without -r",
+            .bash_local_mask_return => "local assignment masks return value",
+            .bash_test_double_eq => "== in [ ] test (not POSIX)",
+            .bash_dollar_question => "Comparing $? instead of using direct if",
+            .bash_test_and_or => "-a/-o in [ ] test (not POSIX)",
             .py_bare_except => "Bare except clause",
             .py_none_equality => "Equality comparison with None",
             .py_bool_equality => "Equality comparison with True/False",
@@ -145,6 +166,8 @@ pub const RuleId = enum(u16) {
             .json_trailing_comma => "Trailing comma",
             .yaml_truthy_string => "Ambiguous truthy string",
             .yaml_dup_keys => "Duplicate keys",
+            .toml_dup_keys => "Duplicate key",
+            .toml_dup_table => "Duplicate table header",
             .md_heading_increment => "Heading level skipped",
             .md_multiple_h1 => "Multiple top-level headings",
             .md_no_empty_links => "Empty link destination",
@@ -171,7 +194,8 @@ pub const RuleId = enum(u16) {
         return switch (self) {
             .trailing_whitespace, .utf8_bom, .zero_width, .bidi_override, .nbsp, .missing_newline, .mixed_line_endings, .smart_quote => true,
             .homoglyph, .null_byte, .invalid_utf8, .junk_file, .secret, .large_file => false,
-            .bash_unquoted_var, .bash_unquoted_cmd_sub, .bash_backtick, .bash_cd_no_check, .bash_unquoted_at => true,
+            .bash_unquoted_var, .bash_unquoted_cmd_sub, .bash_backtick, .bash_cd_no_check, .bash_unquoted_at, .bash_test_double_eq => true,
+            .bash_read_no_r, .bash_local_mask_return, .bash_dollar_question, .bash_test_and_or => false,
             .py_bare_except, .py_none_equality, .py_bool_equality => true,
             .hcl_deprecated_interp => true,
             .hcl_dup_labels => false,
@@ -179,6 +203,8 @@ pub const RuleId = enum(u16) {
             .json_trailing_comma => true,
             .yaml_truthy_string => true,
             .yaml_dup_keys => false,
+            .toml_dup_keys => false,
+            .toml_dup_table => false,
             .md_heading_increment => false,
             .md_multiple_h1 => false,
             .md_no_empty_links => false,
@@ -247,6 +273,7 @@ const skip_groups = [_]struct { name: []const u8, range: GroupRange }{
     .{ .name = "hcl", .range = .{ .lo = 3001, .hi = 3999 } },
     .{ .name = "json", .range = .{ .lo = 4001, .hi = 4999 } },
     .{ .name = "yaml", .range = .{ .lo = 5001, .hi = 5999 } },
+    .{ .name = "toml", .range = .{ .lo = 7001, .hi = 7999 } },
     .{ .name = "md", .range = .{ .lo = 6001, .hi = 6999 } },
     .{ .name = "ext", .range = .{ .lo = 9001, .hi = 9999 } },
 };

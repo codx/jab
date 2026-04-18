@@ -18,6 +18,7 @@ pub const yaml = @import("engine/yaml.zig");
 pub const python = @import("engine/python.zig");
 pub const hcl = @import("engine/hcl.zig");
 pub const markdown = @import("engine/markdown.zig");
+pub const toml = @import("engine/toml.zig");
 
 pub const registry = [_]struct {
     extensions: []const []const u8,
@@ -46,6 +47,10 @@ pub const registry = [_]struct {
     .{
         .extensions = &.{".md"},
         .engine = markdown,
+    },
+    .{
+        .extensions = &.{".toml"},
+        .engine = toml,
     },
 };
 
@@ -89,6 +94,10 @@ test "findEngine matches hcl" {
 
 test "findEngine matches markdown" {
     try std.testing.expect(findEngine("readme.md") == markdown);
+}
+
+test "findEngine matches toml" {
+    try std.testing.expect(findEngine("config.toml") == toml);
 }
 
 test "findEngine returns null for unknown" {
