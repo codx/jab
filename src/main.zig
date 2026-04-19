@@ -356,10 +356,12 @@ pub fn main() !void {
                 file.writeAll(final_output) catch {};
             }
 
-            if (ext) {
-                external.runExternalFixes(allocator, fr.path, tools);
-            }
         }
+    }
+
+    // Run external fixes in parallel after all jab fixes are written
+    if (fix_mode and ext) {
+        external.runParallelExternalFixes(file_results.items, tools);
     }
 
     if (total_diags > 0) {

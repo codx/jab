@@ -131,9 +131,84 @@ pub const FileContext = struct {
     existing_lines: []const u32,
 };
 
-/// Run external tools in batched mode: group files by type and invoke each
-/// tool once with all matching files. Diagnostics are distributed back to
-/// per-file lists by matching on filenames in tool output.
+const max_tool_threads = 9;
+
+const ToolType = enum {
+    shellcheck,
+    yamllint,
+    ruff,
+    ty,
+    hadolint,
+    actionlint,
+    tofu,
+    taplo,
+    nixfmt,
+};
+
+fn createShadowContexts(allocator: std.mem.Allocator, originals: []const FileContext) ![]FileContext {
+    const shadows = try allocator.alloc(FileContext, originals.len);
+    for (originals, 0..) |ctx, i| {
+        const diag_list = try allocator.create(std.ArrayList(Diagnostic));
+        diag_list.* = .empty;
+        shadows[i] = .{
+            .path = ctx.path,
+            .diags = diag_list,
+            .existing_lines = ctx.existing_lines,
+        };
+    }
+    return shadows;
+}
+
+fn toolThread(tool: ToolType, contexts: []FileContext, indices: []const usize) void {
+    var thread_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const alloc = thread_arena.allocator();
+    switch (tool) {
+        .shellcheck => batchShellcheck(alloc, contexts, indices) catch {},
+        .yamllint => batchYamllint(alloc, contexts, indices) catch {},
+        .ruff => batchRuff(alloc, contexts, indices) catch {},
+        .ty => batchTy(alloc, contexts, indices) catch {},
+        .hadolint => batchHadolint(alloc, contexts, indices) catch {},
+        .actionlint => batchActionlint(alloc, contexts, indices) catch {},
+        .tofu => {
+            for (indices) |idx| {
+                runTofuFmt(alloc, contexts[idx].path, contexts[idx].diags) catch {};
+            }
+        },
+        .taplo => {
+            for (indices) |idx| {
+                runTaploFmt(alloc, contexts[idx].path, contexts[idx].diags) catch {};
+            }
+        },
+        .nixfmt => {
+            for (indices) |idx| {
+                runNixfmt(alloc, contexts[idx].path, contexts[idx].diags) catch {};
+            }
+        },
+    }
+}
+
+fn spawnTool(
+    allocator: std.mem.Allocator,
+    threads: *[max_tool_threads]?std.Thread,
+    shadow_sets: *[max_tool_threads]?[]FileContext,
+    count: *usize,
+    tool: ToolType,
+    contexts: []const FileContext,
+    indices: []const usize,
+) void {
+    if (indices.len == 0 or count.* >= max_tool_threads) return;
+    const shadows = createShadowContexts(allocator, contexts) catch return;
+    shadow_sets[count.*] = shadows;
+    threads[count.*] = std.Thread.spawn(.{}, toolThread, .{ tool, shadows, indices }) catch {
+        toolThread(tool, shadows, indices);
+        count.* += 1;
+        return;
+    };
+    count.* += 1;
+}
+
+/// Run external tools in parallel: one thread per tool type.
+/// Each tool gets shadow diagnostic lists; results are merged after all complete.
 pub fn runBatchedExternalTools(
     allocator: std.mem.Allocator,
     file_results: anytype,
@@ -174,38 +249,74 @@ pub fn runBatchedExternalTools(
         if (isNixFile(ctx.path)) try nix_files.append(allocator, i);
     }
 
-    // Batch-capable tools: one invocation for all matching files
-    if (tools.shellcheck and shell_files.items.len > 0)
-        try batchShellcheck(allocator, contexts.items, shell_files.items);
-    if (tools.yamllint and yaml_files.items.len > 0)
-        try batchYamllint(allocator, contexts.items, yaml_files.items);
-    if (tools.ruff and python_files.items.len > 0)
-        try batchRuff(allocator, contexts.items, python_files.items);
-    if (tools.ty and python_files.items.len > 0)
-        try batchTy(allocator, contexts.items, python_files.items);
-    if (tools.hadolint and docker_files.items.len > 0)
-        try batchHadolint(allocator, contexts.items, docker_files.items);
-    if (tools.actionlint and actions_files.items.len > 0)
-        try batchActionlint(allocator, contexts.items, actions_files.items);
+    // Spawn one thread per enabled tool type
+    var threads: [max_tool_threads]?std.Thread = .{null} ** max_tool_threads;
+    var shadow_sets: [max_tool_threads]?[]FileContext = .{null} ** max_tool_threads;
+    var thread_count: usize = 0;
 
-    // Per-file tools (format checkers that don't support multi-file)
-    if (tools.tofu) {
-        for (hcl_files.items) |idx| {
-            const ctx = contexts.items[idx];
-            try runTofuFmt(allocator, ctx.path, ctx.diags);
+    if (tools.shellcheck) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .shellcheck, contexts.items, shell_files.items);
+    if (tools.yamllint) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .yamllint, contexts.items, yaml_files.items);
+    if (tools.ruff) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .ruff, contexts.items, python_files.items);
+    if (tools.ty) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .ty, contexts.items, python_files.items);
+    if (tools.hadolint) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .hadolint, contexts.items, docker_files.items);
+    if (tools.actionlint) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .actionlint, contexts.items, actions_files.items);
+    if (tools.tofu) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .tofu, contexts.items, hcl_files.items);
+    if (tools.taplo) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .taplo, contexts.items, toml_files.items);
+    if (tools.nixfmt) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .nixfmt, contexts.items, nix_files.items);
+
+    // Join all threads
+    for (&threads) |*t| {
+        if (t.*) |thread| {
+            thread.join();
+            t.* = null;
         }
     }
-    if (tools.taplo) {
-        for (toml_files.items) |idx| {
-            const ctx = contexts.items[idx];
-            try runTaploFmt(allocator, ctx.path, ctx.diags);
+
+    // Merge shadow diagnostics into real file contexts
+    for (shadow_sets) |maybe_shadows| {
+        const shadows = maybe_shadows orelse continue;
+        for (contexts.items, shadows) |real_ctx, shadow_ctx| {
+            for (shadow_ctx.diags.items) |diag| {
+                try real_ctx.diags.append(allocator, diag);
+            }
         }
     }
-    if (tools.nixfmt) {
-        for (nix_files.items) |idx| {
-            const ctx = contexts.items[idx];
-            try runNixfmt(allocator, ctx.path, ctx.diags);
-        }
+}
+
+fn hasExternalFix(path: []const u8, tools: ToolSet) bool {
+    return (tools.shellcheck and isShellFile(path)) or
+        (tools.ruff and isPythonFile(path)) or
+        (tools.tofu and isHclFile(path)) or
+        (tools.taplo and isTomlFile(path)) or
+        (tools.nixfmt and isNixFile(path));
+}
+
+fn fixThread(path: []const u8, tools: ToolSet) void {
+    var thread_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    const alloc = thread_arena.allocator();
+    runExternalFixes(alloc, path, tools);
+}
+
+/// Run external fixes in parallel: one thread per file.
+/// Each file is independent (different path), so no synchronization needed.
+pub fn runParallelExternalFixes(file_results: anytype, tools: ToolSet) void {
+    var fix_threads: [256]?std.Thread = .{null} ** 256;
+    var fix_count: usize = 0;
+
+    for (file_results) |fr| {
+        if (!hasExternalFix(fr.path, tools)) continue;
+        if (fix_count >= 256) break;
+
+        fix_threads[fix_count] = std.Thread.spawn(.{}, fixThread, .{ fr.path, tools }) catch {
+            fixThread(fr.path, tools);
+            continue;
+        };
+        fix_count += 1;
+    }
+
+    for (fix_threads[0..fix_count]) |maybe_t| {
+        const t = maybe_t orelse continue;
+        t.join();
     }
 }
 
