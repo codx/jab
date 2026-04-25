@@ -19,7 +19,6 @@ pub fn fix(
     var line_num: u32 = 1;
     var i: usize = 0;
     var prev_heading_level: u8 = 0;
-    var h1_count: u32 = 0;
     var in_fenced_block = false;
 
     while (i < source.len) {
@@ -47,20 +46,6 @@ pub fn fix(
                     }
                 }
                 prev_heading_level = level;
-
-                // JB6002: multiple H1
-                if (level == 1) {
-                    h1_count += 1;
-                    if (!skip.shouldSkip(.md_multiple_h1) and h1_count > 1) {
-                        diags.add(allocator, .{
-                            .rule = .md_multiple_h1,
-                            .line = line_num,
-                            .col = 1,
-                            .message = "Multiple top-level headings",
-                            .span_len = @intCast(trimmed.len),
-                        }) catch {};
-                    }
-                }
             }
 
             // JB6003: empty links [text]()
@@ -150,19 +135,6 @@ test "JB6001 sequential headings are clean" {
             return error.UnexpectedDiagnostic;
         }
     }
-}
-
-test "JB6002 multiple H1" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-    const alloc = arena.allocator();
-    const source = "# Title\nSome text\n# Another Title\n";
-    const result = fix(alloc, source, "test.md", SkipSet{}, true);
-    var found = false;
-    for (result.diagnostics) |d| {
-        if (d.rule == .md_multiple_h1) found = true;
-    }
-    try std.testing.expect(found);
 }
 
 test "JB6003 empty link" {

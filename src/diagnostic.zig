@@ -52,7 +52,6 @@ pub const RuleId = enum(u16) {
 
     // Markdown
     md_heading_increment = 6001,
-    md_multiple_h1 = 6002,
     md_no_empty_links = 6003,
 
     // External tools (--ext only)
@@ -108,7 +107,6 @@ pub const RuleId = enum(u16) {
             .toml_dup_keys => "toml/dup-keys",
             .toml_dup_table => "toml/dup-table",
             .md_heading_increment => "md/heading-increment",
-            .md_multiple_h1 => "md/multiple-h1",
             .md_no_empty_links => "md/no-empty-links",
             .ext_shellcheck => "shellcheck",
             .ext_tofu_fmt => "tofu-fmt",
@@ -169,7 +167,6 @@ pub const RuleId = enum(u16) {
             .toml_dup_keys => "Duplicate key",
             .toml_dup_table => "Duplicate table header",
             .md_heading_increment => "Heading level skipped",
-            .md_multiple_h1 => "Multiple top-level headings",
             .md_no_empty_links => "Empty link destination",
             .ext_shellcheck => "shellcheck diagnostic",
             .ext_tofu_fmt => "tofu fmt diagnostic",
@@ -206,7 +203,6 @@ pub const RuleId = enum(u16) {
             .toml_dup_keys => false,
             .toml_dup_table => false,
             .md_heading_increment => false,
-            .md_multiple_h1 => false,
             .md_no_empty_links => false,
             .ext_shellcheck => true,
             .ext_tofu_fmt => true,

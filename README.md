@@ -105,7 +105,6 @@ jab --skip=JB1001,JB0001     # skip specific rules
 | Rule | Description | Fixable |
 |------|-------------|---------|
 | JB6001 | Heading level skipped | No |
-| JB6002 | Multiple top-level headings | No |
 | JB6003 | Empty link destination `[text]()` | No |
 
 ### TOML (.toml)
