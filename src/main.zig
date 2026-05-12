@@ -35,6 +35,7 @@ pub fn main() !void {
     var skip = SkipSet{};
     var explicit_files: std.ArrayList([]const u8) = .empty;
     var ignore_patterns: std.ArrayList([]const u8) = .empty;
+    var all_files = false;
 
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
@@ -61,6 +62,7 @@ pub fn main() !void {
                 \\  --ext            Also run external tools (shellcheck, yamllint, ruff, ty, tofu, hadolint, actionlint, taplo, nixfmt)
                 \\  --skip=<rules>   Skip rules or categories (comma-separated, e.g. JB1001,JB2)
                 \\  --ignore=<pat>   Ignore files matching pattern (glob, repeatable)
+                \\  --all            Disable .gitignore and default skipped dirs (node_modules, vendor, target, dist, __pycache__)
                 \\  --format=<fmt>   Output format: text (default), json, github
                 \\  --health         Check which external tools are available on $PATH
                 \\  --version        Print version
@@ -123,6 +125,8 @@ pub fn main() !void {
             staged = true;
         } else if (std.mem.eql(u8, arg, "--ext")) {
             ext = true;
+        } else if (std.mem.eql(u8, arg, "--all")) {
+            all_files = true;
         } else if (std.mem.startsWith(u8, arg, "--format=")) {
             const fmt_str = arg[9..];
             if (std.mem.eql(u8, fmt_str, "text")) {
@@ -172,14 +176,14 @@ pub fn main() !void {
             unreachable;
         };
     } else if (explicit_files.items.len > 0) {
-        const entries = try walker.collectFiles(allocator, explicit_files.items);
+        const entries = try walker.collectFiles(allocator, explicit_files.items, walkerOptions(all_files));
         var paths: std.ArrayList([]const u8) = .empty;
         for (entries) |e| {
             try paths.append(allocator, e.path);
         }
         file_paths = paths.items;
     } else {
-        const entries = try walker.collectFiles(allocator, &.{});
+        const entries = try walker.collectFiles(allocator, &.{}, walkerOptions(all_files));
         var paths: std.ArrayList([]const u8) = .empty;
         for (entries) |e| {
             try paths.append(allocator, e.path);
@@ -187,8 +191,8 @@ pub fn main() !void {
         file_paths = paths.items;
     }
 
-    // Load .gitignore patterns
-    loadGitignore(allocator, &ignore_patterns);
+    // Load .gitignore patterns (unless --all)
+    if (!all_files) loadGitignore(allocator, &ignore_patterns);
 
     // Filter out ignored files
     if (ignore_patterns.items.len > 0) {
@@ -355,7 +359,6 @@ pub fn main() !void {
                 defer file.close();
                 file.writeAll(final_output) catch {};
             }
-
         }
     }
 
@@ -383,6 +386,10 @@ pub fn main() !void {
         }
         std.process.exit(1);
     }
+}
+
+fn walkerOptions(all_files: bool) walker.Options {
+    return .{ .skip_dirs = if (all_files) &.{} else &walker.default_skip_dirs };
 }
 
 fn isJunkFile(path: []const u8) bool {
