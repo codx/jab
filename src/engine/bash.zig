@@ -726,6 +726,19 @@ test "JB1007 local without cmd sub is clean" {
     try std.testing.expect(!found);
 }
 
+test "JB1001 quoted positional local assignment is clean" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\nfoo() {\n  local known_hosts_file=\"$1\"\n}\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, true);
+    var found = false;
+    for (result.diagnostics) |d| {
+        if (d.rule == .bash_unquoted_var) found = true;
+    }
+    try std.testing.expect(!found);
+}
+
 test "JB1008 double eq in test" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
