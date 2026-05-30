@@ -1,4 +1,4 @@
-# jab
+# code jab
 
 Single-binary lint, fix & format for bash, JSON, YAML, Python, and HCL/Terraform. Written in Zig, runs in ≤10ms.
 

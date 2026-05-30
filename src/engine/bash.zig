@@ -24,12 +24,17 @@ pub fn fix(
     const tree = parser.parse(source) orelse return noChange(source, &diags);
     defer ts.freeTree(tree);
 
+    var skip_local = skip;
+    if (errexitEnabled(source)) {
+        skip_local.addRule(RuleId.bash_cd_no_check.code());
+    }
+
     var replacements: std.ArrayList(Replacement) = .empty;
 
     var cursor = ts.cursorNew(ts.rootNode(tree));
     defer ts.cursorDelete(&cursor);
 
-    visitNodes(&cursor, source, skip, allocator, &diags, &replacements);
+    visitNodes(&cursor, source, skip_local, allocator, &diags, &replacements);
 
     if (dry_run or replacements.items.len == 0) {
         return .{
@@ -606,6 +611,37 @@ fn isInsideHeredoc(node: ts.Node) bool {
     return false;
 }
 
+/// Returns true if the script enables errexit via `set -e`, `set -eu`, `set -o errexit`, etc.
+/// A failed `cd` under errexit aborts the script, so `|| exit 1` is redundant.
+fn errexitEnabled(source: []const u8) bool {
+    var iter = std.mem.splitScalar(u8, source, '\n');
+    while (iter.next()) |raw_line| {
+        const trimmed = std.mem.trimLeft(u8, raw_line, " \t");
+        if (trimmed.len == 0 or trimmed[0] == '#') continue;
+        if (!std.mem.startsWith(u8, trimmed, "set")) continue;
+        if (trimmed.len < 4 or (trimmed[3] != ' ' and trimmed[3] != '\t')) continue;
+
+        var tok_iter = std.mem.tokenizeAny(u8, trimmed[3..], " \t;");
+        var saw_o = false;
+        while (tok_iter.next()) |tok| {
+            if (tok.len > 0 and tok[0] == '#') break;
+            if (saw_o) {
+                if (std.mem.eql(u8, tok, "errexit")) return true;
+                saw_o = false;
+                continue;
+            }
+            if (std.mem.eql(u8, tok, "-o")) {
+                saw_o = true;
+                continue;
+            }
+            if (tok.len >= 2 and tok[0] == '-' and tok[1] != '-') {
+                if (std.mem.indexOfScalar(u8, tok[1..], 'e') != null) return true;
+            }
+        }
+    }
+    return false;
+}
+
 fn applyReplacements(allocator: std.mem.Allocator, source: []const u8, replacements: []const Replacement) ?[]const u8 {
     var sorted: std.ArrayList(Replacement) = .empty;
     sorted.appendSlice(allocator, replacements) catch return null;
@@ -672,6 +708,52 @@ test "JB1004 cd with || exit is clean" {
         if (d.rule == .bash_cd_no_check) found = true;
     }
     try std.testing.expect(!found);
+}
+
+test "JB1004 cd is clean under set -e" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\nset -e\ncd /tmp\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, true);
+    for (result.diagnostics) |d| {
+        try std.testing.expect(d.rule != .bash_cd_no_check);
+    }
+}
+
+test "JB1004 cd is clean under set -eu -o pipefail" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\nset -eu -o pipefail\ncd \"${work}/src\"\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, true);
+    for (result.diagnostics) |d| {
+        try std.testing.expect(d.rule != .bash_cd_no_check);
+    }
+}
+
+test "JB1004 cd is clean under set -o errexit" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\nset -o errexit\ncd /tmp\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, true);
+    for (result.diagnostics) |d| {
+        try std.testing.expect(d.rule != .bash_cd_no_check);
+    }
+}
+
+test "JB1004 cd still flagged when set -e is only in a comment" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\n# set -e is not active here\ncd /tmp\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, true);
+    var found = false;
+    for (result.diagnostics) |d| {
+        if (d.rule == .bash_cd_no_check) found = true;
+    }
+    try std.testing.expect(found);
 }
 
 test "JB1006 read without -r" {
