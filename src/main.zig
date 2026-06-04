@@ -191,10 +191,27 @@ pub fn main() !void {
         file_paths = paths.items;
     }
 
-    // Load .gitignore patterns (unless --all)
-    if (!all_files) loadGitignore(allocator, &ignore_patterns);
+    // Resolve .gitignore (unless --all). With --ext we delegate to git, which
+    // honours nested .gitignore, .git/info/exclude and the global excludesFile;
+    // otherwise (or if git is unavailable) we use the built-in root-.gitignore
+    // matcher. User --ignore globs are kept separate and always apply below.
+    if (!all_files) {
+        var used_git = false;
+        if (ext) {
+            if (git.ignoredSet(allocator, file_paths)) |set| {
+                var s = set;
+                var filtered: std.ArrayList([]const u8) = .empty;
+                for (file_paths) |path| {
+                    if (!s.contains(path)) try filtered.append(allocator, path);
+                }
+                file_paths = filtered.items;
+                used_git = true;
+            } else |_| {}
+        }
+        if (!used_git) loadGitignore(allocator, &ignore_patterns);
+    }
 
-    // Filter out ignored files
+    // Filter out ignored files (user --ignore globs + built-in .gitignore fallback)
     if (ignore_patterns.items.len > 0) {
         var filtered: std.ArrayList([]const u8) = .empty;
         for (file_paths) |path| {
@@ -488,6 +505,8 @@ fn loadGitignore(allocator: std.mem.Allocator, patterns: *std.ArrayList([]const 
         const line = std.mem.trim(u8, raw_line, " \t\r");
         if (line.len == 0) continue;
         if (line[0] == '#') continue;
+        // Negation (re-include) is unsupported; skip so we never wrongly ignore.
+        if (line[0] == '!') continue;
         // Strip trailing slash (directory marker) — we match against file paths
         const pat = std.mem.trimRight(u8, line, "/");
         if (pat.len == 0) continue;
@@ -502,25 +521,50 @@ fn matchesAnyIgnore(path: []const u8, patterns: []const []const u8) bool {
     return false;
 }
 
-/// Simple glob match: `*` matches any sequence of non-`/` characters,
-/// `**` matches any sequence including `/`. Literal characters match exactly.
+/// Match a path against a single `.gitignore` pattern, following git's
+/// anchoring rules. Within a path component, `*` matches any run of non-`/`
+/// characters and `**` matches across `/`; literal characters match exactly.
+///
+///   - A pattern containing no `/` (e.g. `*.json`, `vendor`) is unanchored:
+///     it matches if it matches *any* path component, so `*.json` ignores a
+///     nested `src/sub/nested.json` and `vendor` ignores everything under any
+///     `vendor/` directory — matching git's behaviour.
+///   - A pattern containing a `/` (e.g. `/build`, `config/*.json`) is anchored
+///     to the repo root: it must match the path from the start, either in full
+///     or up to a directory boundary (so `/build` also ignores `build/x.json`).
 fn matchGlob(str: []const u8, pattern: []const u8) bool {
-    // Check if pattern appears as a substring for simple directory patterns like "vendor"
-    if (std.mem.indexOf(u8, pattern, "*") == null) {
-        // No wildcards: match if path contains the pattern as a component
-        // e.g., "vendor" matches "vendor/foo.zig" and "src/vendor/bar.zig"
-        if (std.mem.eql(u8, str, pattern)) return true;
-        if (std.mem.startsWith(u8, str, pattern) and pattern.len < str.len and str[pattern.len] == '/') return true;
-        if (std.mem.indexOf(u8, str, pattern)) |idx| {
-            // Check it's a path component boundary
-            const before_ok = idx == 0 or str[idx - 1] == '/';
-            const after_end = idx + pattern.len;
-            const after_ok = after_end == str.len or str[after_end] == '/';
-            if (before_ok and after_ok) return true;
+    var pat = pattern;
+    var anchored = false;
+    if (pat.len > 0 and pat[0] == '/') {
+        anchored = true;
+        pat = pat[1..];
+    }
+    if (pat.len == 0) return false;
+    if (std.mem.indexOfScalar(u8, pat, '/') != null) anchored = true;
+
+    if (anchored) {
+        // Match from the root, allowing a directory-prefix match so a pattern
+        // like `build` (after a leading slash) ignores `build/x` too.
+        var i: usize = 0;
+        while (i <= str.len) : (i += 1) {
+            if (i == str.len or str[i] == '/') {
+                if (globMatch(str[0..i], 0, pat, 0)) return true;
+            }
         }
         return false;
     }
-    return globMatch(str, 0, pattern, 0);
+
+    // Unanchored: match the pattern against each path component.
+    var start: usize = 0;
+    var i: usize = 0;
+    while (i <= str.len) : (i += 1) {
+        if (i == str.len or str[i] == '/') {
+            const component = str[start..i];
+            if (component.len > 0 and globMatch(component, 0, pat, 0)) return true;
+            start = i + 1;
+        }
+    }
+    return false;
 }
 
 fn globMatch(str: []const u8, si: usize, pat: []const u8, pi: usize) bool {
@@ -568,6 +612,22 @@ test "matchGlob wildcard" {
     try std.testing.expect(!matchGlob("test.yaml", "*.json"));
     try std.testing.expect(matchGlob("src/foo/bar.py", "**/*.py"));
     try std.testing.expect(matchGlob("bar.py", "**/*.py"));
+}
+
+test "matchGlob unanchored wildcard matches at any depth" {
+    // A slashless pattern matches the basename at every level (git semantics).
+    try std.testing.expect(matchGlob("src/sub/nested.json", "*.json"));
+    try std.testing.expect(matchGlob("a/b/c/x.log", "*.log"));
+    try std.testing.expect(!matchGlob("src/sub/nested.yaml", "*.json"));
+}
+
+test "matchGlob anchored pattern" {
+    // A slash makes the pattern root-anchored.
+    try std.testing.expect(matchGlob("config/app.json", "config/*.json"));
+    try std.testing.expect(!matchGlob("src/config/app.json", "config/*.json"));
+    // Leading slash anchors and still ignores everything under the directory.
+    try std.testing.expect(matchGlob("build/out.json", "/build"));
+    try std.testing.expect(!matchGlob("src/build/out.json", "/build"));
 }
 
 test "matchesAnyIgnore" {

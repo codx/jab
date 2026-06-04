@@ -42,78 +42,6 @@ jab --skip=JB1001,JB0001     # skip specific rules
 
 ### Universal (all files)
 
-| Rule | Description | Fixable |
-|------|-------------|---------|
-| JB0001 | Trailing whitespace | Yes |
-| JB0002 | UTF-8 BOM | Yes |
-| JB0003 | Zero-width characters | Yes |
-| JB0004 | Bidi override characters (CVE-2021-42574) | Yes |
-| JB0005 | Non-breaking space | Yes |
-| JB0006 | Homoglyph characters | No |
-| JB0007 | Missing trailing newline | Yes |
-| JB0008 | Mixed line endings (CRLF + LF) | Yes |
-| JB0009 | Null bytes | No |
-| JB0010 | Smart quotes | Yes |
-| JB0011 | Invalid UTF-8 | No |
-
-### Bash (.sh, .bash)
-
-| Rule | Description | Fixable |
-|------|-------------|---------|
-| JB1001 | Unquoted variable expansion | Yes |
-| JB1002 | Unquoted command substitution | Yes |
-| JB1003 | Legacy backtick syntax | Yes |
-| JB1004 | cd without error handling | No |
-| JB1005 | Unquoted `$@` | Yes |
-| JB1006 | `read` without `-r` (SC2162) | No |
-| JB1007 | `local x=$(cmd)` masks return value (SC2155) | No |
-| JB1008 | `==` in `[ ]` test, not POSIX (SC2039) | Yes |
-| JB1009 | `$?` comparison instead of direct `if` (SC2181) | No |
-| JB1010 | `-a`/`-o` in `[ ]` test, not POSIX (SC2166) | No |
-
-### Python (.py, .pyi)
-
-| Rule | Description | Fixable |
-|------|-------------|---------|
-| JB2001 | Bare `except:` clause | Yes |
-| JB2002 | `== None` / `!= None` | Yes |
-| JB2003 | `== True` / `== False` | Yes |
-
-### HCL/Terraform (.tf, .tfvars, .hcl, .tofu)
-
-| Rule | Description | Fixable |
-|------|-------------|---------|
-| JB3001 | Deprecated interpolation-only `"${var.x}"` | Yes |
-| JB3002 | Duplicate block labels | No |
-
-### JSON (.json, .jsonc)
-
-| Rule | Description | Fixable |
-|------|-------------|---------|
-| JB4001 | Duplicate keys | No |
-| JB4002 | Trailing commas | Yes |
-
-### YAML (.yaml, .yml)
-
-| Rule | Description | Fixable |
-|------|-------------|---------|
-| JB5001 | Ambiguous truthy strings (yes/no/on/off) | Yes |
-| JB5002 | Duplicate keys | No |
-
-### Markdown (.md)
-
-| Rule | Description | Fixable |
-|------|-------------|---------|
-| JB6001 | Heading level skipped | No |
-| JB6003 | Empty link destination `[text]()` | No |
-
-### TOML (.toml)
-
-| Rule | Description | Fixable |
-|------|-------------|---------|
-| JB7001 | Duplicate keys (same table) | No |
-| JB7002 | Duplicate table headers | No |
-
 ## Inline Suppression
 
 Disable rules on specific lines with `jab:disable` in a comment:
@@ -147,7 +75,12 @@ Use `--ignore` to exclude files by pattern (repeatable):
 jab --ignore=vendor --ignore='*.generated.py'
 ```
 
-jab also respects `.gitignore` patterns automatically.
+jab also respects `.gitignore` automatically. By default it reads the
+repository-root `.gitignore` with a built-in matcher (a pattern with no slash
+matches at any depth, e.g. `*.json` ignores `src/sub/x.json`). With `--ext` it
+delegates to `git check-ignore`, additionally honouring nested `.gitignore`
+files, `.git/info/exclude`, and the global `core.excludesFile`. Pass `--all` to
+disable `.gitignore` and the default skipped directories entirely.
 
 ## Pre-commit Hook
 
@@ -175,14 +108,6 @@ jab auto-detects `GITHUB_ACTIONS=true` and outputs `::error` annotations that ap
 
 ~8ms to lint 14 files across all 5 languages. Target: ≤33ms on a typical 10-file commit.
 
-| Platform | Binary size |
-|----------|------------|
-| darwin-arm64 | 2.6 MB |
-| darwin-amd64 | 2.5 MB |
-| linux-amd64 | 6.3 MB |
-| linux-arm64 | 6.5 MB |
-| windows-amd64 | 2.9 MB |
-
 ## Build
 
 Requires [Zig 0.15+](https://ziglang.org/download/).
@@ -193,7 +118,3 @@ make test      # run tests
 make release   # release binary
 make fmt       # format zig source
 ```
-
-## License
-
-MIT
