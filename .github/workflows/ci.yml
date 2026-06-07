@@ -22,8 +22,10 @@ jobs:
       # parser.c is generated, not committed — materialize from pinned inputs.
       - run: make grammars
       - run: nix develop --command zig build test --summary all
-      - name: Dogfood jab on its own fixtures
-        run: nix develop --command bash -c 'zig build && ./zig-out/bin/jab test/fixtures/'
+      - name: Dogfood jab on its own source
+        # test/fixtures/ holds intentionally-broken files that exist to trigger
+        # the lint rules — exclude them or jab (correctly) fails on itself.
+        run: nix develop --command bash -c 'zig build && ./zig-out/bin/jab --ignore=test/fixtures'
 
   cross-compile:
     if: github.repository_owner == 'codx'
