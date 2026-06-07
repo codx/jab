@@ -3,6 +3,7 @@ zig-out/
 *.o
 
 dist/
+release-build/
 
 # Nix
 result

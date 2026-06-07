@@ -1,0 +1,9 @@
+repository:
+  description: "Single-binary linter, fixer, and formatter for bash, JSON, YAML, Python, and HCL."
+  homepage: ""
+  topics:
+    - lab
+    - prototype
+    - experimental
+    - "2026"
+    - w19

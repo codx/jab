@@ -40,6 +40,13 @@
         };
         zig = pkgs.zigpkgs."0.15.2";
 
+        # Single source of truth for the version. CI's drift-check asserts that
+        # this file does NOT hard-code a version — it must be read from
+        # build.zig.zon, as below.
+        pkgVersion = builtins.elemAt (builtins.match
+          "(.|\n)*\\.version = \"([^\"]+)\"(.|\n)*"
+          (builtins.readFile ./build.zig.zon)) 1;
+
         externalTools = with pkgs; [
           shellcheck
           yamllint
@@ -58,7 +65,7 @@
           }:
           pkgs.stdenvNoCC.mkDerivation {
             pname = "jab";
-            version = "0.1.0";
+            version = pkgVersion;
 
             src = pkgs.lib.cleanSource ./.;
 
@@ -110,6 +117,15 @@
         packages.default = mkJab { };
         packages.jab = mkJab { };
         packages.jab-full = mkJab { withTools = true; };
+
+        # Generated tree-sitter parser.c files, pinned to the flake inputs.
+        # `make grammars` materializes these into grammars/*/src/ so a raw
+        # `zig build` works outside the nix sandbox (CI cross-compile, release).
+        packages.grammars = pkgs.runCommand "jab-grammars" { } ''
+          install -Dm644 ${tree-sitter-bash}/src/parser.c $out/bash/parser.c
+          install -Dm644 ${tree-sitter-python}/src/parser.c $out/python/parser.c
+          install -Dm644 ${tree-sitter-hcl}/src/parser.c $out/hcl/parser.c
+        '';
 
         devShells.default = pkgs.mkShell {
           packages = [ zig ] ++ externalTools;

@@ -1,4 +1,4 @@
-.PHONY: help build test check fix release clean fmt
+.PHONY: help build test check fix release clean fmt grammars release-build release-tag repro
 
 # Default target
 help: ## Show this help
@@ -89,5 +89,58 @@ checksums: release-all ## Generate SHA256 checksums for release binaries
 	@echo "Written to dist/checksums.sha256"
 	@cat dist/checksums.sha256
 
+grammars: ## Materialize generated tree-sitter parser.c + headers from pinned flake inputs
+	@out=$$(nix build .#grammars --no-link --print-out-paths); \
+	for lang in bash python hcl; do \
+		mkdir -p "grammars/$$lang/src/tree_sitter"; \
+		cp "$$out/$$lang/parser.c" "grammars/$$lang/src/parser.c"; \
+		cp vendor/tree-sitter/lib/src/parser.h \
+		   vendor/tree-sitter/lib/src/array.h \
+		   vendor/tree-sitter/lib/include/tree_sitter/api.h \
+		   "grammars/$$lang/src/tree_sitter/"; \
+	done
+	@echo "grammars materialized"
+
+# --- Reproducible release (mirrors .github/workflows/release.yml) -------------
+# Lets a contributor rehearse the release matrix locally before tagging.
+# Outputs land in release-build/. Needs GNU tar (provided by the nix devShell).
+
+TARGETS := \
+    x86_64-linux-musl \
+    aarch64-linux-musl \
+    x86_64-macos \
+    aarch64-macos
+
+VERSION           := $(shell sed -nE 's/.*\.version = "([^"]+)".*/\1/p' build.zig.zon)
+SOURCE_DATE_EPOCH := $(shell git log -1 --pretty=%ct 2>/dev/null || date +%s)
+
+release-tag: ## Bump build.zig.zon, commit, and tag a release (usage: make release-tag VERSION=0.2.0)
+	@test -n "$(VERSION)" || { echo "usage: make release-tag VERSION=0.2.0" >&2; exit 1; }
+	@git diff --quiet && git diff --cached --quiet || { echo "working tree is dirty; commit or stash first" >&2; exit 1; }
+	@git rev-parse -q --verify "refs/tags/v$(VERSION)" >/dev/null && { echo "tag v$(VERSION) already exists" >&2; exit 1; } || true
+	@sed -i.bak -E 's/(\.version = ")[^"]+(")/\1$(VERSION)\2/' build.zig.zon && rm -f build.zig.zon.bak
+	@git commit -qm "Release v$(VERSION)" build.zig.zon
+	@git tag "v$(VERSION)"
+	@echo "tagged v$(VERSION) — push to trigger the release workflow:"
+	@echo "    git push origin $$(git rev-parse --abbrev-ref HEAD) && git push origin v$(VERSION)"
+
+release-build: grammars ## Cross-compile + package the full release matrix into release-build/ (reproducible)
+	@rm -rf release-build && mkdir -p release-build
+	@$(foreach t,$(TARGETS), \
+	    echo "==> $(t)"; \
+	    rm -rf zig-out; \
+	    SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
+	      zig build -Dtarget=$(t) --release=safe -Dstrip=true; \
+	    tar --sort=name --owner=0 --group=0 --numeric-owner \
+	        --mtime="@$(SOURCE_DATE_EPOCH)" --format=ustar \
+	        -cf - -C zig-out/bin jab \
+	      | gzip -n -9 > "release-build/jab-$(VERSION)-$(t).tar.gz"; \
+	)
+	@cd release-build && (sha256sum jab-* > SHA256SUMS 2>/dev/null || shasum -a 256 jab-* > SHA256SUMS) && cat SHA256SUMS
+
+repro: ## Verify a published release matches a local rebuild (usage: make repro TAG=v0.2.0)
+	@test -n "$(TAG)" || { echo "usage: make repro TAG=v0.2.0" >&2; exit 1; }
+	@scripts/repro.sh $(TAG)
+
 clean: ## Remove build artifacts
-	rm -rf zig-out .zig-cache dist
+	rm -rf zig-out .zig-cache dist release-build

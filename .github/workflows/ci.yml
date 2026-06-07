@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  test:
+    if: github.repository_owner == 'codx'
+    name: Test
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
+      # parser.c is generated, not committed — materialize from pinned inputs.
+      - run: make grammars
+      - run: nix develop --command zig build test --summary all
+      - name: Dogfood jab on its own fixtures
+        run: nix develop --command bash -c 'zig build && ./zig-out/bin/jab test/fixtures/'
+
+  cross-compile:
+    if: github.repository_owner == 'codx'
+    name: Cross-compile ${{ matrix.target }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-linux-musl
+          - aarch64-linux-musl
+          - x86_64-macos
+          - aarch64-macos
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
+      - run: make grammars
+      - run: nix develop --command zig build -Dtarget=${{ matrix.target }} --release=safe -Dstrip=true
+
+  repro-check:
+    if: github.repository_owner == 'codx'
+    name: Reproducible build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0  # need history for SOURCE_DATE_EPOCH
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
+      - run: make grammars
+      - name: Build x86_64-linux-musl twice and diff sha256
+        run: |
+          set -euxo pipefail
+          export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          build_once() {
+            rm -rf zig-out
+            nix develop --command \
+              zig build -Dtarget=x86_64-linux-musl --release=safe -Dstrip=true
+            tar --sort=name --owner=0 --group=0 --numeric-owner \
+                --mtime="@${SOURCE_DATE_EPOCH}" --format=ustar \
+                -cf - -C zig-out/bin jab \
+              | gzip -n -9 > "$1"
+            sha256sum "$1"
+          }
+          build_once one.tar.gz
+          build_once two.tar.gz
+          a=$(sha256sum one.tar.gz | awk '{print $1}')
+          b=$(sha256sum two.tar.gz | awk '{print $1}')
+          if [ "$a" != "$b" ]; then
+            echo "::error::reproducible build check failed: $a != $b"
+            exit 1
+          fi
+
+  drift-check:
+    if: github.repository_owner == 'codx'
+    name: Version drift
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Verify version manifests are consistent
+        run: |
+          set -euo pipefail
+          zon=$(sed -nE 's/.*\.version = "([^"]+)".*/\1/p' build.zig.zon)
+          test -n "$zon" || { echo "could not parse version from build.zig.zon"; exit 1; }
+          echo "build.zig.zon: $zon"
+          # flake.nix must NOT hard-code the version — it should read from
+          # build.zig.zon. This guards against accidental re-hardcoding.
+          if grep -E '^[[:space:]]*version[[:space:]]*=[[:space:]]*"[0-9]' flake.nix; then
+            echo "::error::flake.nix has a hard-coded version — read it from build.zig.zon instead"
+            exit 1
+          fi
+
+  nix-check:
+    if: github.repository_owner == 'codx'
+    name: Nix flake check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
+      - run: nix flake check --no-build --print-build-logs
