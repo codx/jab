@@ -1,4 +1,4 @@
-.PHONY: help build test check fix release clean fmt grammars release-build release-tag repro
+.PHONY: help build test test-fixtures update-fixtures check fix release clean fmt grammars release-build release-tag repro
 
 # Default target
 help: ## Show this help
@@ -7,8 +7,14 @@ help: ## Show this help
 build: ## Build jab (debug)
 	zig build
 
-test: ## Run all tests
+test: test-fixtures ## Run all tests (unit + fixture snapshot)
 	zig build test --summary all
+
+test-fixtures: build ## Check fixture diagnostics against the committed snapshot
+	./scripts/test-fixtures.sh
+
+update-fixtures: build ## Regenerate the fixture snapshot after intended rule changes
+	./scripts/test-fixtures.sh --update
 
 check: build ## Run jab on its own source (dogfood)
 	./zig-out/bin/jab test/fixtures/

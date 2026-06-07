@@ -1,0 +1,42 @@
+{"file":"test/fixtures/bash/backticks.sh","line":2,"col":5,"rule":"bash/backtick","message":"Legacy backtick syntax","severity":"lint","fixable":true,"suggestion":"Use $(...) instead"}
+{"file":"test/fixtures/bash/backticks.sh","line":3,"col":5,"rule":"bash/backtick","message":"Legacy backtick syntax","severity":"lint","fixable":true,"suggestion":"Use $(...) instead"}
+{"file":"test/fixtures/bash/cd_no_error.sh","line":2,"col":1,"rule":"bash/cd-no-check","message":"cd without error handling","severity":"lint","fixable":true,"suggestion":"Add || exit 1"}
+{"file":"test/fixtures/bash/cd_no_error.sh","line":3,"col":1,"rule":"bash/cd-no-check","message":"cd without error handling","severity":"lint","fixable":true,"suggestion":"Add || exit 1"}
+{"file":"test/fixtures/bash/dollar_question.sh","line":3,"col":6,"rule":"bash/dollar-question","message":"Use direct if statement instead of comparing $?","severity":"lint","fixable":false,"suggestion":"Use if cmd; then ... instead"}
+{"file":"test/fixtures/bash/local_mask_return.sh","line":3,"col":3,"rule":"bash/local-mask-return","message":"local assignment masks return value of command substitution","severity":"lint","fixable":false,"suggestion":"Declare and assign separately"}
+{"file":"test/fixtures/bash/local_mask_return.sh","line":4,"col":3,"rule":"bash/local-mask-return","message":"local assignment masks return value of command substitution","severity":"lint","fixable":false,"suggestion":"Declare and assign separately"}
+{"file":"test/fixtures/bash/local_mask_return.sh","line":5,"col":3,"rule":"bash/local-mask-return","message":"export assignment masks return value of command substitution","severity":"lint","fixable":false,"suggestion":"Declare and assign separately"}
+{"file":"test/fixtures/bash/read_no_r.sh","line":2,"col":1,"rule":"bash/read-no-r","message":"read without -r will mangle backslashes","severity":"lint","fixable":false,"suggestion":"Use read -r"}
+{"file":"test/fixtures/bash/read_no_r.sh","line":3,"col":1,"rule":"bash/read-no-r","message":"read without -r will mangle backslashes","severity":"lint","fixable":false,"suggestion":"Use read -r"}
+{"file":"test/fixtures/bash/read_no_r.sh","line":4,"col":7,"rule":"bash/read-no-r","message":"read without -r will mangle backslashes","severity":"lint","fixable":false,"suggestion":"Use read -r"}
+{"file":"test/fixtures/bash/test_and_or.sh","line":2,"col":10,"rule":"bash/test-and-or","message":"-a in [ ] is not POSIX, use [ x ] && [ y ]","severity":"lint","fixable":false,"suggestion":"Use && instead"}
+{"file":"test/fixtures/bash/test_and_or.sh","line":3,"col":14,"rule":"bash/test-and-or","message":"-o in [ ] is not POSIX, use [ x ] || [ y ]","severity":"lint","fixable":false,"suggestion":"Use || instead"}
+{"file":"test/fixtures/bash/test_double_eq.sh","line":2,"col":8,"rule":"bash/test-double-eq","message":"== in [ ] is not POSIX","severity":"lint","fixable":true,"suggestion":"Use = instead"}
+{"file":"test/fixtures/bash/test_double_eq.sh","line":3,"col":11,"rule":"bash/test-double-eq","message":"== in [ ] is not POSIX","severity":"lint","fixable":true,"suggestion":"Use = instead"}
+{"file":"test/fixtures/bash/unquoted_at.sh","line":2,"col":10,"rule":"bash/unquoted-at","message":"Unquoted $@","severity":"lint","fixable":true,"suggestion":"Use \"$@\""}
+{"file":"test/fixtures/bash/unquoted_at.sh","line":3,"col":8,"rule":"bash/unquoted-var","message":"Unquoted variable expansion","severity":"lint","fixable":true,"suggestion":"Quote with double quotes"}
+{"file":"test/fixtures/bash/unquoted_vars.sh","line":2,"col":6,"rule":"bash/unquoted-var","message":"Unquoted variable expansion","severity":"lint","fixable":true,"suggestion":"Quote with double quotes"}
+{"file":"test/fixtures/bash/unquoted_vars.sh","line":3,"col":6,"rule":"bash/unquoted-var","message":"Unquoted variable expansion","severity":"lint","fixable":true,"suggestion":"Quote with double quotes"}
+{"file":"test/fixtures/hcl/duplicate_blocks.tf","line":5,"col":1,"rule":"hcl/dup-labels","message":"Duplicate block labels","severity":"lint","fixable":false}
+{"file":"test/fixtures/hcl/interpolation_only.tf","line":2,"col":19,"rule":"hcl/deprecated-interp","message":"Deprecated interpolation-only expression","severity":"lint","fixable":true,"suggestion":"var.ami"}
+{"file":"test/fixtures/hcl/interpolation_only.tf","line":3,"col":19,"rule":"hcl/deprecated-interp","message":"Deprecated interpolation-only expression","severity":"lint","fixable":true,"suggestion":"var.instance_type"}
+{"file":"test/fixtures/json/duplicate_keys.json","line":3,"col":3,"rule":"json/dup-keys","message":"Duplicate key","severity":"lint","fixable":false}
+{"file":"test/fixtures/json/no_newline.json","line":1,"col":19,"rule":"missing-newline","message":"Missing trailing newline","severity":"format","fixable":true}
+{"file":"test/fixtures/json/trailing_comma.json","line":3,"col":14,"rule":"json/trailing-comma","message":"Trailing comma","severity":"lint","fixable":true,"suggestion":"Remove trailing comma"}
+{"file":"test/fixtures/json/trailing_whitespace.json","line":1,"col":19,"rule":"trailing-whitespace","message":"Trailing whitespace","severity":"format","fixable":true}
+{"file":"test/fixtures/markdown/empty_links.md","line":3,"col":17,"rule":"md/no-empty-links","message":"Empty link destination","severity":"lint","fixable":false}
+{"file":"test/fixtures/markdown/empty_links.md","line":5,"col":14,"rule":"md/no-empty-links","message":"Empty link destination","severity":"lint","fixable":false}
+{"file":"test/fixtures/markdown/heading_skip.md","line":3,"col":1,"rule":"md/heading-increment","message":"Heading level skipped","severity":"lint","fixable":false}
+{"file":"test/fixtures/python/bad_comparisons.py","line":1,"col":6,"rule":"py/none-equality","message":"Use 'is None' instead of '== None'","severity":"lint","fixable":true,"suggestion":"is"}
+{"file":"test/fixtures/python/bad_comparisons.py","line":10,"col":6,"rule":"py/bool-equality","message":"Comparison with True/False","severity":"lint","fixable":true,"suggestion":"Use truthiness test instead"}
+{"file":"test/fixtures/python/bad_comparisons.py","line":4,"col":6,"rule":"py/none-equality","message":"Use 'is not None' instead of '!= None'","severity":"lint","fixable":true,"suggestion":"is not"}
+{"file":"test/fixtures/python/bad_comparisons.py","line":7,"col":6,"rule":"py/bool-equality","message":"Comparison with True/False","severity":"lint","fixable":true,"suggestion":"Use truthiness test instead"}
+{"file":"test/fixtures/python/bare_except.py","line":3,"col":1,"rule":"py/bare-except","message":"Bare except clause","severity":"lint","fixable":true,"suggestion":"Use except Exception:"}
+{"file":"test/fixtures/toml/duplicate_keys.toml","line":4,"col":1,"rule":"toml/dup-keys","message":"Duplicate key","severity":"lint","fixable":false}
+{"file":"test/fixtures/toml/duplicate_tables.toml","line":4,"col":1,"rule":"toml/dup-table","message":"Duplicate table header","severity":"lint","fixable":false}
+{"file":"test/fixtures/yaml/duplicate_keys.yaml","line":3,"col":1,"rule":"yaml/dup-keys","message":"Duplicate key","severity":"lint","fixable":false}
+{"file":"test/fixtures/yaml/truthy_strings.yaml","line":2,"col":10,"rule":"yaml/truthy-string","message":"Ambiguous truthy string","severity":"lint","fixable":true,"suggestion":"true"}
+{"file":"test/fixtures/yaml/truthy_strings.yaml","line":3,"col":10,"rule":"yaml/truthy-string","message":"Ambiguous truthy string","severity":"lint","fixable":true,"suggestion":"false"}
+{"file":"test/fixtures/yaml/truthy_strings.yaml","line":4,"col":9,"rule":"yaml/truthy-string","message":"Ambiguous truthy string","severity":"lint","fixable":true,"suggestion":"true"}
+{"file":"test/fixtures/yaml/truthy_strings.yaml","line":5,"col":11,"rule":"yaml/truthy-string","message":"Ambiguous truthy string","severity":"lint","fixable":true,"suggestion":"false"}
+{"summary":{"errors":41,"files":23,"fixable":24}}

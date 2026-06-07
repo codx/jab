@@ -13,6 +13,7 @@ const supported_extensions = [_][]const u8{
     ".tf",   ".tfvars",
     ".hcl",  ".tofu",
     ".md",
+    ".toml",
 };
 
 pub const default_skip_dirs = [_][]const u8{
@@ -124,6 +125,7 @@ test "isSupportedFile" {
     try std.testing.expect(isSupportedFile("bar.py"));
     try std.testing.expect(isSupportedFile("deploy.sh"));
     try std.testing.expect(isSupportedFile("readme.md"));
+    try std.testing.expect(isSupportedFile("config.toml"));
     try std.testing.expect(!isSupportedFile("Makefile"));
 }
 
