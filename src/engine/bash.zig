@@ -206,9 +206,24 @@ fn checkUnquotedCommandSub(
 
     const parent = ts.nodeParent(node);
     if (ts.nodeIsNull(parent)) return;
-    const parent_type = ts.nodeType(parent);
-    if (std.mem.eql(u8, parent_type, "string")) return;
-    if (std.mem.eql(u8, parent_type, "variable_assignment")) return;
+
+    // Walk up through parameter-expansion wrappers to find the real quoting
+    // context. A command substitution is safe from word splitting when it sits
+    // inside a double-quoted string or on the RHS of an assignment — including
+    // when it's nested in an expansion default/alternate value, e.g.
+    // `"${ARCH:-$(uname -m)}"`, where the immediate parent is the `expansion`
+    // node rather than the enclosing `string`.
+    var ctx = parent;
+    while (!ts.nodeIsNull(ctx)) {
+        const ctx_type = ts.nodeType(ctx);
+        if (std.mem.eql(u8, ctx_type, "string")) return;
+        if (std.mem.eql(u8, ctx_type, "variable_assignment")) return;
+        if (std.mem.eql(u8, ctx_type, "expansion")) {
+            ctx = ts.nodeParent(ctx);
+            continue;
+        }
+        break;
+    }
     if (isInsideArithmetic(node)) return;
     if (isInsideHeredoc(node)) return;
 
