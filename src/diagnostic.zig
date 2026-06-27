@@ -8,7 +8,6 @@ pub const RuleId = enum(u16) {
     bidi_override = 4,
     nbsp = 5,
     homoglyph = 6,
-    missing_newline = 7,
     mixed_line_endings = 8,
     null_byte = 9,
     smart_quote = 10,
@@ -77,7 +76,6 @@ pub const RuleId = enum(u16) {
             .bidi_override => "bidi-override",
             .nbsp => "nbsp",
             .homoglyph => "homoglyph",
-            .missing_newline => "missing-newline",
             .mixed_line_endings => "mixed-line-endings",
             .null_byte => "null-byte",
             .smart_quote => "smart-quote",
@@ -137,7 +135,6 @@ pub const RuleId = enum(u16) {
             .bidi_override => "Bidi override character",
             .nbsp => "Non-breaking space",
             .homoglyph => "Homoglyph character",
-            .missing_newline => "Missing trailing newline",
             .mixed_line_endings => "Mixed line endings",
             .null_byte => "Null byte",
             .smart_quote => "Smart quote",
@@ -182,14 +179,14 @@ pub const RuleId = enum(u16) {
 
     pub fn category(self: RuleId) Category {
         return switch (self) {
-            .trailing_whitespace, .missing_newline, .mixed_line_endings, .ext_tofu_fmt, .ext_taplo, .ext_nixfmt => .format,
+            .trailing_whitespace, .mixed_line_endings, .ext_tofu_fmt, .ext_taplo, .ext_nixfmt => .format,
             else => .lint,
         };
     }
 
     pub fn fixable(self: RuleId) bool {
         return switch (self) {
-            .trailing_whitespace, .utf8_bom, .zero_width, .bidi_override, .nbsp, .missing_newline, .mixed_line_endings, .smart_quote => true,
+            .trailing_whitespace, .utf8_bom, .zero_width, .bidi_override, .nbsp, .mixed_line_endings, .smart_quote => true,
             .homoglyph, .null_byte, .invalid_utf8, .junk_file, .secret, .large_file => false,
             .bash_unquoted_var, .bash_unquoted_cmd_sub, .bash_backtick, .bash_cd_no_check, .bash_unquoted_at, .bash_test_double_eq => true,
             .bash_read_no_r, .bash_local_mask_return, .bash_dollar_question, .bash_test_and_or => false,
@@ -362,7 +359,7 @@ test "SkipSet parse names" {
     try std.testing.expect(!set.skip_format);
     try std.testing.expect(set.shouldSkip(RuleId.trailing_whitespace));
     try std.testing.expect(set.shouldSkip(RuleId.json_dup_keys)); // lint category
-    try std.testing.expect(!set.shouldSkip(RuleId.missing_newline)); // format, not skipped
+    try std.testing.expect(!set.shouldSkip(RuleId.mixed_line_endings)); // format, not skipped
 }
 
 test "SkipSet parse group" {

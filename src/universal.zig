@@ -212,16 +212,6 @@ pub fn scan(
         diags.add(allocator, .{ .rule = .mixed_line_endings, .line = 1, .col = 1, .message = "Mixed line endings (CRLF + LF)" }) catch {};
     }
 
-    // JB0007: Missing trailing newline
-    if (result.items.len > 0 and result.items[result.items.len - 1] != '\n') {
-        if (!skip.shouldSkip(.missing_newline)) {
-            diags.add(allocator, .{ .rule = .missing_newline, .line = line, .col = col, .message = "Missing trailing newline" }) catch {};
-        }
-        if (!dry_run) {
-            result.append(allocator, '\n') catch {};
-        }
-    }
-
     if (dry_run) {
         result.deinit(allocator);
         return .{ .output = source, .diagnostics = diags.slice(), .changed = false };
@@ -433,13 +423,13 @@ test "JB0001 trailing whitespace" {
     try std.testing.expect(r.diagnostics.len >= 1);
 }
 
-test "JB0007 missing trailing newline" {
+test "no trailing newline is left untouched" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const alloc = arena.allocator();
     const r = scan(alloc, "hello", SkipSet{}, false);
-    try std.testing.expectEqualStrings("hello\n", r.output);
-    try std.testing.expect(r.changed);
+    try std.testing.expectEqualStrings("hello", r.output);
+    try std.testing.expect(!r.changed);
 }
 
 test "JB0002 BOM removal" {

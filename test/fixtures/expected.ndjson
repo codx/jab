@@ -21,7 +21,6 @@
 {"file":"test/fixtures/hcl/interpolation_only.tf","line":2,"col":19,"rule":"hcl/deprecated-interp","message":"Deprecated interpolation-only expression","severity":"lint","fixable":true,"suggestion":"var.ami"}
 {"file":"test/fixtures/hcl/interpolation_only.tf","line":3,"col":19,"rule":"hcl/deprecated-interp","message":"Deprecated interpolation-only expression","severity":"lint","fixable":true,"suggestion":"var.instance_type"}
 {"file":"test/fixtures/json/duplicate_keys.json","line":3,"col":3,"rule":"json/dup-keys","message":"Duplicate key","severity":"lint","fixable":false}
-{"file":"test/fixtures/json/no_newline.json","line":1,"col":19,"rule":"missing-newline","message":"Missing trailing newline","severity":"format","fixable":true}
 {"file":"test/fixtures/json/trailing_comma.json","line":3,"col":14,"rule":"json/trailing-comma","message":"Trailing comma","severity":"lint","fixable":true,"suggestion":"Remove trailing comma"}
 {"file":"test/fixtures/json/trailing_whitespace.json","line":1,"col":19,"rule":"trailing-whitespace","message":"Trailing whitespace","severity":"format","fixable":true}
 {"file":"test/fixtures/markdown/empty_links.md","line":3,"col":17,"rule":"md/no-empty-links","message":"Empty link destination","severity":"lint","fixable":false}
@@ -39,4 +38,4 @@
 {"file":"test/fixtures/yaml/truthy_strings.yaml","line":3,"col":10,"rule":"yaml/truthy-string","message":"Ambiguous truthy string","severity":"lint","fixable":true,"suggestion":"false"}
 {"file":"test/fixtures/yaml/truthy_strings.yaml","line":4,"col":9,"rule":"yaml/truthy-string","message":"Ambiguous truthy string","severity":"lint","fixable":true,"suggestion":"true"}
 {"file":"test/fixtures/yaml/truthy_strings.yaml","line":5,"col":11,"rule":"yaml/truthy-string","message":"Ambiguous truthy string","severity":"lint","fixable":true,"suggestion":"false"}
-{"summary":{"errors":41,"files":23,"fixable":24}}
+{"summary":{"errors":40,"files":22,"fixable":23}}
