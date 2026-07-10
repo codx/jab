@@ -1,9 +1,45 @@
 repository:
-  description: "Single-binary linter, fixer, and formatter for bash, JSON, YAML, Python, and HCL."
-  homepage: ""
+  description: "Single-binary linter, fixer, and formatter for bash, JSON, YAML, Python, etc..."
   topics:
     - lab
     - prototype
     - experimental
     - "2026"
     - w19
+  private: false
+  delete_branch_on_merge: true
+  allow_squash_merge: true
+  allow_merge_commit: false
+  enable_vulnerability_alerts: true
+  enable_automated_security_fixes: true
+  enable_secret_scanning: true
+  enable_secret_scanning_push_protection: true
+  enable_private_vulnerability_reporting: true
+  enable_immutable_releases: true
+
+repository_extra:
+  allow_auto_merge: true
+  allow_update_branch: true
+
+actions:
+  default_workflow_permissions: read
+  can_approve_pull_request_reviews: false
+
+rulesets:
+  - name: default branch protection
+    target: branch
+    enforcement: active
+    conditions:
+      ref_name:
+        include: ["~DEFAULT_BRANCH"]
+        exclude: []
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: pull_request
+        parameters:
+          required_approving_review_count: 0
+          dismiss_stale_reviews_on_push: true
+          require_code_owner_review: false
+          require_last_push_approval: false
+          required_review_thread_resolution: true
