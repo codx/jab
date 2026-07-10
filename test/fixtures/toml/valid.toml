@@ -10,3 +10,17 @@ name = "first"
 
 [[products]]
 name = "second"
+
+[[--scope]]
+--when.repositories = ["~/A"]
+[--scope.user]
+name = "Someone"
+email = "a@example.com"
+
+[[--scope]]
+--when.repositories = ["~/B"]
+[--scope.user]
+name = "Other"
+email = "b@example.com"
+[--scope.aliases]
+pr = ["git", "push"]
