@@ -37,21 +37,25 @@ pub fn fix(
                 // Reset key tracker for new section
                 key_tracker = .{};
 
-                // JB7002: duplicate table headers
-                if (!skip.shouldSkip(.toml_dup_table)) {
-                    if (!header.is_array) {
-                        if (table_tracker.isDuplicate(header.name)) {
-                            const col: u32 = @intCast(line.len - trimmed.len + 1);
-                            diags.add(allocator, .{
-                                .rule = .toml_dup_table,
-                                .line = line_num,
-                                .col = col,
-                                .message = "Duplicate table header",
-                                .span_len = @intCast(header.full_len),
-                            }) catch {};
-                        }
-                        table_tracker.add(allocator, header.name);
+                if (header.is_array) {
+                    // Each [[name]] starts a fresh array element, so
+                    // subtable headers [name.X] scoped to this element may
+                    // legitimately repeat across elements. Drop tracked
+                    // subtables rooted at this array before continuing.
+                    table_tracker.removePrefix(header.name);
+                } else if (!skip.shouldSkip(.toml_dup_table)) {
+                    // JB7002: duplicate table headers
+                    if (table_tracker.isDuplicate(header.name)) {
+                        const col: u32 = @intCast(line.len - trimmed.len + 1);
+                        diags.add(allocator, .{
+                            .rule = .toml_dup_table,
+                            .line = line_num,
+                            .col = col,
+                            .message = "Duplicate table header",
+                            .span_len = @intCast(header.full_len),
+                        }) catch {};
                     }
+                    table_tracker.add(allocator, header.name);
                 }
             } else if (parseKey(trimmed)) |key| {
                 // JB7001: duplicate keys in same table
@@ -175,6 +179,24 @@ const TableTracker = struct {
             self.count += 1;
         }
     }
+
+    /// Drop tracked tables whose name is `prefix` or starts with `prefix.`.
+    /// Used when a new `[[prefix]]` array element begins, since each element
+    /// is an independent context for its subtables.
+    fn removePrefix(self: *TableTracker, prefix: []const u8) void {
+        var write: usize = 0;
+        for (self.tables[0..self.count]) |t| {
+            const keep = !std.mem.eql(u8, t, prefix) and
+                !(t.len > prefix.len + 1 and
+                    std.mem.startsWith(u8, t, prefix) and
+                    t[prefix.len] == '.');
+            if (keep) {
+                self.tables[write] = t;
+                write += 1;
+            }
+        }
+        self.count = write;
+    }
 };
 
 test "JB7001 duplicate keys" {
@@ -219,6 +241,71 @@ test "JB7002 array tables are not duplicates" {
     const source = "[[products]]\nname = \"a\"\n\n[[products]]\nname = \"b\"\n";
     const result = fix(alloc, source, "test.toml", SkipSet{}, true);
     try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
+test "JB7002 subtables under repeating array elements are clean" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source =
+        \\[[--scope]]
+        \\--when.repositories = ["~/A"]
+        \\[--scope.user]
+        \\name = "Someone"
+        \\
+        \\[[--scope]]
+        \\--when.repositories = ["~/B"]
+        \\[--scope.user]
+        \\name = "Other"
+        \\
+    ;
+    const result = fix(alloc, source, "test.toml", SkipSet{}, true);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
+test "JB7002 nested subtables reset per array element" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source =
+        \\[[env]]
+        \\[env.build]
+        \\cc = "gcc"
+        \\[env.test]
+        \\runner = "pytest"
+        \\
+        \\[[env]]
+        \\[env.build]
+        \\cc = "clang"
+        \\[env.test]
+        \\runner = "jest"
+        \\
+    ;
+    const result = fix(alloc, source, "test.toml", SkipSet{}, true);
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
+test "JB7002 regular table duplicate still caught after array element" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source =
+        \\[[products]]
+        \\name = "a"
+        \\
+        \\[server]
+        \\host = "x"
+        \\
+        \\[server]
+        \\host = "y"
+        \\
+    ;
+    const result = fix(alloc, source, "test.toml", SkipSet{}, true);
+    var found = false;
+    for (result.diagnostics) |d| {
+        if (d.rule == .toml_dup_table) found = true;
+    }
+    try std.testing.expect(found);
 }
 
 test "clean TOML no diagnostics" {
