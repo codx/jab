@@ -118,3 +118,20 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       - uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
       - run: nix flake check --no-build --print-build-logs
+
+  gate:
+    name: Required CI checks
+    needs: [test, cross-compile, repro-check, drift-check, nix-check]
+    runs-on: ubuntu-24.04
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Verify all required jobs succeeded
+        run: |
+          set -euo pipefail
+          check() { [ "$1" = "success" ] || { echo "::error::$2 did not succeed ($1)"; exit 1; }; }
+          check "${{ needs.test.result }}"          "test"
+          check "${{ needs.cross-compile.result }}" "cross-compile"
+          check "${{ needs.repro-check.result }}"   "repro-check"
+          check "${{ needs.drift-check.result }}"   "drift-check"
+          check "${{ needs.nix-check.result }}"     "nix-check"
+          echo "All required jobs passed"
