@@ -39,7 +39,6 @@ jobs:
         target:
           - x86_64-linux-musl
           - aarch64-linux-musl
-          - x86_64-macos
           - aarch64-macos
     permissions:
       contents: read
