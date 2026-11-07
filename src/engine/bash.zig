@@ -178,6 +178,7 @@ fn checkUnquotedExpansion(
     }
 
     if (skip.shouldSkip(.bash_unquoted_var)) return;
+    if (isInForWordList(node)) return;
     const point = ts.nodeStartPoint(node);
     diags.add(allocator, .{
         .rule = .bash_unquoted_var,
@@ -226,6 +227,7 @@ fn checkUnquotedCommandSub(
     }
     if (isInsideArithmetic(node)) return;
     if (isInsideHeredoc(node)) return;
+    if (isInForWordList(node)) return;
 
     const text = ts.nodeText(node, source);
     if (text.len == 0) return;
@@ -615,6 +617,25 @@ fn isInsideArithmetic(node: ts.Node) bool {
     return false;
 }
 
+/// Returns true if the node is (part of) a word in a `for x in WORDS` or
+/// `select x in WORDS` list. Word splitting is the intent there: quoting
+/// collapses the list into a single iteration (ShellCheck SC2066), and
+/// ShellCheck itself does not report SC2086 in this position.
+fn isInForWordList(node: ts.Node) bool {
+    var current = node;
+    var parent = ts.nodeParent(current);
+    while (!ts.nodeIsNull(parent)) {
+        const ptype = ts.nodeType(parent);
+        if (std.mem.eql(u8, ptype, "concatenation")) {
+            current = parent;
+            parent = ts.nodeParent(current);
+            continue;
+        }
+        return std.mem.eql(u8, ptype, "for_statement");
+    }
+    return false;
+}
+
 fn isInsideHeredoc(node: ts.Node) bool {
     var current = node;
     while (!ts.nodeIsNull(current)) {
@@ -906,4 +927,29 @@ test "clean bash no diagnostics" {
     const source = "#!/bin/bash\necho \"hello\"\n";
     const result = fix(alloc, source, "test.sh", SkipSet{}, true);
     try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
+test "JB1001 for-in word list is not flagged or quoted" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\nfor version in $used; do\n  echo \"$version\"\ndone\nfor f in $(ls) ${dir}/x; do :; done\nselect o in $opts; do :; done\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, false);
+    for (result.diagnostics) |d| {
+        try std.testing.expect(d.rule != .bash_unquoted_var and d.rule != .bash_unquoted_cmd_sub);
+    }
+    try std.testing.expect(!result.changed);
+}
+
+test "JB1001 expansion in for-loop body is still flagged" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\nfor v in a b; do\n  echo $v\ndone\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, true);
+    var found = false;
+    for (result.diagnostics) |d| {
+        if (d.rule == .bash_unquoted_var) found = true;
+    }
+    try std.testing.expect(found);
 }

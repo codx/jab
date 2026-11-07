@@ -17,10 +17,10 @@ update-fixtures: build ## Regenerate the fixture snapshot after intended rule ch
 	./scripts/test-fixtures.sh --update
 
 check: build ## Run jab on its own source (dogfood)
-	./zig-out/bin/jab test/fixtures/
+	./zig-out/bin/jab --ignore=test/fixtures
 
 fix: build ## Run jab fix on its own source (dogfood)
-	./zig-out/bin/jab -f test/fixtures/
+	./zig-out/bin/jab -f --ignore=test/fixtures
 
 fmt: ## Format all Zig source with zig fmt
 	zig fmt src/ build.zig
