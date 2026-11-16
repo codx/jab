@@ -621,17 +621,69 @@ fn isInsideArithmetic(node: ts.Node) bool {
 /// `select x in WORDS` list. Word splitting is the intent there: quoting
 /// collapses the list into a single iteration (ShellCheck SC2066), and
 /// ShellCheck itself does not report SC2086 in this position.
+///
+/// tree-sitter-bash has no rule for the brace-body form
+/// `for x in $a; { ...; }`, so such loops come back as an ERROR node whose
+/// leading tokens are still `for NAME in WORDS`. Those are recognised too, so
+/// the fixer never quotes them into SC2066 code.
 fn isInForWordList(node: ts.Node) bool {
     var current = node;
     var parent = ts.nodeParent(current);
     while (!ts.nodeIsNull(parent)) {
         const ptype = ts.nodeType(parent);
-        if (std.mem.eql(u8, ptype, "concatenation")) {
+        if (std.mem.eql(u8, ptype, "concatenation") or std.mem.eql(u8, ptype, "expansion")) {
             current = parent;
             parent = ts.nodeParent(current);
             continue;
         }
-        return std.mem.eql(u8, ptype, "for_statement");
+        if (std.mem.eql(u8, ptype, "for_statement")) return true;
+        if (std.mem.eql(u8, ptype, "ERROR")) return isInErrorForWordList(parent, current);
+        return false;
+    }
+    return false;
+}
+
+/// For an ERROR node containing the token run `for|select NAME in WORDS...`,
+/// returns true if `child` is one of those WORDS. Error recovery may fold
+/// preceding statements into the same ERROR node, so the run is located by
+/// scanning backwards from `child` rather than assuming it starts at index 0.
+fn isInErrorForWordList(err: ts.Node, child: ts.Node) bool {
+    const count = ts.nodeChildCount(err);
+    const child_start = ts.nodeStartByte(child);
+    const child_end = ts.nodeEndByte(child);
+    var idx: ?u32 = null;
+    var i: u32 = 0;
+    while (i < count) : (i += 1) {
+        const c = ts.nodeChild(err, i);
+        if (ts.nodeStartByte(c) == child_start and ts.nodeEndByte(c) == child_end) {
+            idx = i;
+            break;
+        }
+    }
+    var j = idx orelse return false;
+    // Skip back over the preceding words of the same list.
+    while (j > 0) {
+        j -= 1;
+        const ctype = ts.nodeType(ts.nodeChild(err, j));
+        if (isWordListItem(ctype)) continue;
+        if (!std.mem.eql(u8, ctype, "in")) return false;
+        if (j < 2) return false;
+        if (!std.mem.eql(u8, ts.nodeType(ts.nodeChild(err, j - 1)), "variable_name")) return false;
+        const kw = ts.nodeType(ts.nodeChild(err, j - 2));
+        return std.mem.eql(u8, kw, "for") or std.mem.eql(u8, kw, "select");
+    }
+    return false;
+}
+
+fn isWordListItem(node_type: []const u8) bool {
+    const items = [_][]const u8{
+        "word",                 "simple_expansion", "expansion",        "command_substitution",
+        "concatenation",        "string",           "raw_string",       "ansi_c_string",
+        "translated_string",    "number",           "brace_expression", "process_substitution",
+        "arithmetic_expansion",
+    };
+    for (items) |t| {
+        if (std.mem.eql(u8, node_type, t)) return true;
     }
     return false;
 }
@@ -950,6 +1002,52 @@ test "JB1001 expansion in for-loop body is still flagged" {
     var found = false;
     for (result.diagnostics) |d| {
         if (d.rule == .bash_unquoted_var) found = true;
+    }
+    try std.testing.expect(found);
+}
+
+test "JB1001 brace-body for/select word list is not quoted (SC2066)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    // tree-sitter-bash parses the `{ ...; }` body form as an ERROR node,
+    // optionally swallowing preceding statements.
+    const sources = [_][]const u8{
+        "#!/bin/bash\nfor x in $a; { echo \"$x\"; }\n",
+        "#!/bin/bash\necho hi\nfor x in $a $b; { echo \"$x\"; }\n",
+        "#!/bin/bash\nfor x in $a; do :; done\nfor x in $(ls) ${d}/*; { echo \"$x\"; }\n",
+        "#!/bin/bash\necho hi\nselect o in $opts; { echo \"$o\"; break; }\n",
+    };
+    for (sources) |source| {
+        const result = fix(alloc, source, "test.sh", SkipSet{}, false);
+        for (result.diagnostics) |d| {
+            try std.testing.expect(d.rule != .bash_unquoted_var and d.rule != .bash_unquoted_cmd_sub);
+        }
+        try std.testing.expect(!result.changed);
+    }
+}
+
+test "JB1001 expansion default value in for word list is not quoted" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\nfor x in ${a:-$(ls)} ${b:-$c}; do echo \"$x\"; done\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, false);
+    for (result.diagnostics) |d| {
+        try std.testing.expect(d.rule != .bash_unquoted_var and d.rule != .bash_unquoted_cmd_sub);
+    }
+    try std.testing.expect(!result.changed);
+}
+
+test "JB1001 expansion after brace-body for loop is still flagged" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const source = "#!/bin/bash\nfor x in $a; { echo $x; }\n";
+    const result = fix(alloc, source, "test.sh", SkipSet{}, true);
+    var found = false;
+    for (result.diagnostics) |d| {
+        if (d.rule == .bash_unquoted_var and d.col == 21) found = true;
     }
     try std.testing.expect(found);
 }
