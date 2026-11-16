@@ -38,7 +38,7 @@
           inherit system;
           overlays = [ zig-overlay.overlays.default ];
         };
-        zig = pkgs.zigpkgs."0.15.2";
+        zig = pkgs.zigpkgs."0.17.1";
 
         # Single source of truth for the version. CI's drift-check asserts that
         # this file does NOT hard-code a version — it must be read from

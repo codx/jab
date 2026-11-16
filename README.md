@@ -110,7 +110,7 @@ jab auto-detects `GITHUB_ACTIONS=true` and outputs `::error` annotations that ap
 
 ## Build
 
-Requires [Zig 0.15+](https://ziglang.org/download/).
+Requires [Zig 0.17+](https://ziglang.org/download/).
 
 ```sh
 make build     # debug build

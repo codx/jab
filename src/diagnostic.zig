@@ -65,7 +65,7 @@ pub const RuleId = enum(u16) {
     ext_nixfmt = 9009,
 
     pub fn code(self: RuleId) u16 {
-        return @intFromEnum(self);
+        return @backingInt(self);
     }
 
     pub fn name(self: RuleId) []const u8 {
@@ -119,9 +119,9 @@ pub const RuleId = enum(u16) {
     }
 
     pub fn fromName(s: []const u8) ?RuleId {
-        const fields = @typeInfo(RuleId).@"enum".fields;
-        inline for (fields) |f| {
-            const rule: RuleId = @enumFromInt(f.value);
+        const values = @typeInfo(RuleId).@"enum".field_values;
+        inline for (values) |v| {
+            const rule: RuleId = @fromBackingInt(@intCast(v));
             if (std.mem.eql(u8, s, rule.name())) return rule;
         }
         return null;
@@ -274,7 +274,7 @@ const skip_groups = [_]struct { name: []const u8, range: GroupRange }{
 pub const SkipSet = struct {
     skip_lint: bool = false,
     skip_format: bool = false,
-    rule_codes: [32]u16 = [_]u16{0} ** 32,
+    rule_codes: [32]u16 = @splat(0),
     rule_count: u8 = 0,
     group_mask: u8 = 0, // bit per group in skip_groups
 

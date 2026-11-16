@@ -25,7 +25,7 @@ pub fn fix(
         const line_start = i;
         const line_end = findLineEnd(source, i);
         const line = source[line_start..line_end];
-        const trimmed = std.mem.trimLeft(u8, line, " ");
+        const trimmed = std.mem.trimStart(u8, line, " ");
 
         // Track fenced code blocks
         if (trimmed.len >= 3 and std.mem.startsWith(u8, trimmed, "```")) {

@@ -29,7 +29,7 @@ pub fn fix(
         const line_start = i;
         const line_end = findLineEnd(source, i);
         const line = source[line_start..line_end];
-        const trimmed = std.mem.trimLeft(u8, line, " \t");
+        const trimmed = std.mem.trimStart(u8, line, " \t");
 
         if (trimmed.len > 0 and trimmed[0] != '#') {
             // Table header: [table] or [[array]]
@@ -126,7 +126,7 @@ fn parseKey(trimmed: []const u8) ?[]const u8 {
         const quote = trimmed[0];
         const end = std.mem.indexOfScalarPos(u8, trimmed, 1, quote) orelse return null;
         // Must be followed by = (with optional whitespace)
-        const after = std.mem.trimLeft(u8, trimmed[end + 1 ..], " \t");
+        const after = std.mem.trimStart(u8, trimmed[end + 1 ..], " \t");
         if (after.len == 0 or after[0] != '=') return null;
         return trimmed[1..end];
     }
@@ -134,7 +134,7 @@ fn parseKey(trimmed: []const u8) ?[]const u8 {
     // Bare key
     const eq_pos = std.mem.indexOfScalar(u8, trimmed, '=') orelse return null;
     if (eq_pos == 0) return null;
-    return std.mem.trimRight(u8, trimmed[0..eq_pos], " \t");
+    return std.mem.trimEnd(u8, trimmed[0..eq_pos], " \t");
 }
 
 fn findLineEnd(source: []const u8, start: usize) usize {

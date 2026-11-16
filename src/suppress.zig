@@ -104,9 +104,9 @@ fn resolveRule(s: []const u8) ?u16 {
     if (RuleId.fromName(s)) |rule| return rule.code();
 
     // Try short name: match against suffix after "/" in rule names
-    const fields = @typeInfo(RuleId).@"enum".fields;
-    inline for (fields) |f| {
-        const rule: RuleId = @enumFromInt(f.value);
+    const values = @typeInfo(RuleId).@"enum".field_values;
+    inline for (values) |v| {
+        const rule: RuleId = @fromBackingInt(@intCast(v));
         const full_name = rule.name();
         if (std.mem.indexOf(u8, full_name, "/")) |slash| {
             const short = full_name[slash + 1 ..];

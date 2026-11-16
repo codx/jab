@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("tree_sitter/api.h");
-});
+const c = @import("tree_sitter_c");
 
 pub const Language = *const c.TSLanguage;
 pub const Tree = *c.TSTree;

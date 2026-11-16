@@ -10,7 +10,7 @@ const truthy_words = [_][]const u8{
     "yes", "no", "on", "off",
     "Yes", "No", "On", "Off",
     "YES", "NO", "ON", "OFF",
-    "y", "n", "Y", "N",
+    "y",   "n",  "Y",  "N",
 };
 
 pub fn fix(
@@ -119,7 +119,7 @@ const KeyValue = struct {
 };
 
 fn parseKeyValue(line: []const u8) ?KeyValue {
-    const trimmed = std.mem.trimLeft(u8, line, " \t");
+    const trimmed = std.mem.trimStart(u8, line, " \t");
     if (trimmed.len == 0 or trimmed[0] == '#' or trimmed[0] == '-') return null;
 
     const colon_pos = std.mem.indexOfScalar(u8, trimmed, ':') orelse return null;
@@ -188,7 +188,7 @@ fn countIndent(line: []const u8) u32 {
 }
 
 fn isCommentOrEmpty(line: []const u8) bool {
-    const trimmed = std.mem.trimLeft(u8, line, " \t");
+    const trimmed = std.mem.trimStart(u8, line, " \t");
     return trimmed.len == 0 or trimmed[0] == '#' or (trimmed.len >= 3 and std.mem.eql(u8, trimmed[0..3], "---"));
 }
 
