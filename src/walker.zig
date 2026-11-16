@@ -169,9 +169,9 @@ test "looksBinary detects NUL in leading bytes only" {
     try std.testing.expect(looksBinary("abc\x00"));
 
     // A NUL past the sniff window is not considered (matches git).
-    const late = [_]u8{'a'} ** binary_sniff_len ++ [_]u8{0};
+    const late = @as([binary_sniff_len]u8, @splat('a')) ++ [_]u8{0};
     try std.testing.expect(!looksBinary(&late));
-    const edge = [_]u8{'a'} ** (binary_sniff_len - 1) ++ [_]u8{0};
+    const edge = @as([binary_sniff_len - 1]u8, @splat('a')) ++ [_]u8{0};
     try std.testing.expect(looksBinary(&edge));
 }
 
