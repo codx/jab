@@ -21,12 +21,13 @@ const Format = enum {
     github,
 };
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.arena.allocator();
+    const io = init.io;
+    const env = init.environ_map;
+    const path_var = env.get("PATH") orelse "";
 
-    const args = try std.process.argsAlloc(allocator);
+    const args = try init.minimal.args.toSlice(allocator);
 
     var fix_mode = false;
     var staged = false;
@@ -42,14 +43,14 @@ pub fn main() !void {
         const arg = args[i];
         if (std.mem.eql(u8, arg, "--version")) {
             var buf: [4096]u8 = undefined;
-            var stdout_writer = std.fs.File.stdout().writer(&buf);
+            var stdout_writer = std.Io.File.stdout().writer(io, &buf);
             const stdout = &stdout_writer.interface;
             try stdout.print("jab {s}\n", .{version});
             try stdout.flush();
             return;
         } else if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
             var buf: [4096]u8 = undefined;
-            var stdout_writer = std.fs.File.stdout().writer(&buf);
+            var stdout_writer = std.Io.File.stdout().writer(io, &buf);
             const stdout = &stdout_writer.interface;
             try stdout.print(
                 \\jab {s} — lint, fix, and format Bash/JSON/YAML/Python/HCL
@@ -78,9 +79,9 @@ pub fn main() !void {
             return;
         } else if (std.mem.eql(u8, arg, "--health")) {
             var buf: [4096]u8 = undefined;
-            var stdout_writer = std.fs.File.stdout().writer(&buf);
+            var stdout_writer = std.Io.File.stdout().writer(io, &buf);
             const stdout = &stdout_writer.interface;
-            const color = text_output.Color.detect();
+            const color = text_output.Color.detect(io, env);
             try stdout.print("\n  {s}Tool          Language        Status{s}\n", .{ color.bold(), color.reset() });
             try stdout.print("  {s}\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80{s}\n", .{ color.dim(), color.reset() });
             const tools = [_]struct { name: []const u8, pad: []const u8, langs: []const u8, lpad: []const u8 }{
@@ -96,7 +97,7 @@ pub fn main() !void {
             };
             var found: usize = 0;
             for (tools) |t| {
-                const ok = external.findOnPath(t.name);
+                const ok = external.findOnPath(io, path_var, t.name);
                 if (ok) found += 1;
                 try stdout.print("  {s}{s}{s}{s}{s}{s}{s}{s}\n", .{
                     t.name,
@@ -137,7 +138,7 @@ pub fn main() !void {
                 format = .github;
             } else {
                 var buf: [4096]u8 = undefined;
-                var stderr_writer = std.fs.File.stderr().writer(&buf);
+                var stderr_writer = std.Io.File.stderr().writer(io, &buf);
                 const stderr = &stderr_writer.interface;
                 try stderr.print("jab: unknown format '{s}' (expected text, json, github)\n", .{fmt_str});
                 try stderr.flush();
@@ -151,7 +152,7 @@ pub fn main() !void {
             try explicit_files.append(allocator, arg);
         } else {
             var buf: [4096]u8 = undefined;
-            var stderr_writer = std.fs.File.stderr().writer(&buf);
+            var stderr_writer = std.Io.File.stderr().writer(io, &buf);
             const stderr = &stderr_writer.interface;
             try stderr.print("jab: unknown option '{s}'\n", .{arg});
             try stderr.flush();
@@ -161,14 +162,14 @@ pub fn main() !void {
 
     // Resolve output format: explicit flag > env detection > text
     const output_format: Format = format orelse
-        if (isGitHubActions()) .github else .text;
+        if (isGitHubActions(env)) .github else .text;
 
     // Resolve file list
     var file_paths: []const []const u8 = &.{};
     if (staged) {
-        file_paths = git.getStagedFiles(allocator) catch {
+        file_paths = git.getStagedFiles(allocator, io) catch {
             var buf: [4096]u8 = undefined;
-            var stderr_writer = std.fs.File.stderr().writer(&buf);
+            var stderr_writer = std.Io.File.stderr().writer(io, &buf);
             const stderr = &stderr_writer.interface;
             try stderr.print("jab: failed to get staged files (not a git repo?)\n", .{});
             try stderr.flush();
@@ -176,14 +177,14 @@ pub fn main() !void {
             unreachable;
         };
     } else if (explicit_files.items.len > 0) {
-        const entries = try walker.collectFiles(allocator, explicit_files.items, walkerOptions(all_files));
+        const entries = try walker.collectFiles(allocator, io, explicit_files.items, walkerOptions(all_files));
         var paths: std.ArrayList([]const u8) = .empty;
         for (entries) |e| {
             try paths.append(allocator, e.path);
         }
         file_paths = paths.items;
     } else {
-        const entries = try walker.collectFiles(allocator, &.{}, walkerOptions(all_files));
+        const entries = try walker.collectFiles(allocator, io, &.{}, walkerOptions(all_files));
         var paths: std.ArrayList([]const u8) = .empty;
         for (entries) |e| {
             try paths.append(allocator, e.path);
@@ -198,7 +199,7 @@ pub fn main() !void {
     if (!all_files) {
         var used_git = false;
         if (ext) {
-            if (git.ignoredSet(allocator, file_paths)) |set| {
+            if (git.ignoredSet(allocator, io, file_paths)) |set| {
                 var s = set;
                 var filtered: std.ArrayList([]const u8) = .empty;
                 for (file_paths) |path| {
@@ -208,7 +209,7 @@ pub fn main() !void {
                 used_git = true;
             } else |_| {}
         }
-        if (!used_git) loadGitignore(allocator, &ignore_patterns);
+        if (!used_git) loadGitignore(allocator, io, &ignore_patterns);
     }
 
     // Filter out ignored files (user --ignore globs + built-in .gitignore fallback)
@@ -223,12 +224,12 @@ pub fn main() !void {
     }
 
     // Detect available external tools once (avoids repeated PATH lookups per file)
-    const tools = if (ext) external.ToolSet.detect() else external.ToolSet{};
+    const tools = if (ext) external.ToolSet.detect(io, path_var) else external.ToolSet{};
 
-    const color = text_output.Color.detect();
+    const color = text_output.Color.detect(io, env);
 
     var buf: [8192]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&buf);
+    var stdout_writer = std.Io.File.stdout().writer(io, &buf);
     const stdout = &stdout_writer.interface;
 
     // --- Phase 1+2: per-file jab analysis ---
@@ -276,7 +277,7 @@ pub fn main() !void {
     }
 
     for (file_paths) |path| {
-        const source = std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024) catch continue;
+        const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024 + 1)) catch continue;
 
         var diag_list: std.ArrayList(Diagnostic) = .empty;
 
@@ -325,7 +326,7 @@ pub fn main() !void {
 
     // --- Phase 3: batched external tools (--ext only) ---
     if (ext) {
-        try external.runBatchedExternalTools(allocator, file_results.items, tools);
+        try external.runBatchedExternalTools(allocator, io, file_results.items, tools);
     }
 
     // --- Phase 4: render + fix ---
@@ -372,16 +373,16 @@ pub fn main() !void {
             const final_output = fr.engine_output orelse fr.universal_output;
 
             if (fr.universal_changed or fr.engine_changed) {
-                const file = std.fs.cwd().createFile(fr.path, .{}) catch continue;
-                defer file.close();
-                file.writeAll(final_output) catch {};
+                const file = std.Io.Dir.cwd().createFile(io, fr.path, .{}) catch continue;
+                defer file.close(io);
+                file.writeStreamingAll(io, final_output) catch {};
             }
         }
     }
 
     // Run external fixes in parallel after all jab fixes are written
     if (fix_mode and ext) {
-        external.runParallelExternalFixes(file_results.items, tools);
+        external.runParallelExternalFixes(io, file_results.items, tools);
     }
 
     if (total_diags > 0) {
@@ -459,10 +460,9 @@ fn containsJunkDir(path: []const u8) bool {
     return false;
 }
 
-fn isGitHubActions() bool {
-    const env = std.process.getEnvVarOwned(std.heap.page_allocator, "GITHUB_ACTIONS") catch return false;
-    defer std.heap.page_allocator.free(env);
-    return std.mem.eql(u8, env, "true");
+fn isGitHubActions(env: *const std.process.Environ.Map) bool {
+    const val = env.get("GITHUB_ACTIONS") orelse return false;
+    return std.mem.eql(u8, val, "true");
 }
 
 test "isJunkFile detects DS_Store" {
@@ -498,8 +498,8 @@ test "containsJunkDir rejects normal paths" {
     try std.testing.expect(!containsJunkDir("terraform/main.tf"));
 }
 
-fn loadGitignore(allocator: std.mem.Allocator, patterns: *std.ArrayList([]const u8)) void {
-    const content = std.fs.cwd().readFileAlloc(allocator, ".gitignore", 64 * 1024) catch return;
+fn loadGitignore(allocator: std.mem.Allocator, io: std.Io, patterns: *std.ArrayList([]const u8)) void {
+    const content = std.Io.Dir.cwd().readFileAlloc(io, ".gitignore", allocator, .limited(64 * 1024 + 1)) catch return;
     var iter = std.mem.splitScalar(u8, content, '\n');
     while (iter.next()) |raw_line| {
         const line = std.mem.trim(u8, raw_line, " \t\r");
@@ -508,7 +508,7 @@ fn loadGitignore(allocator: std.mem.Allocator, patterns: *std.ArrayList([]const 
         // Negation (re-include) is unsupported; skip so we never wrongly ignore.
         if (line[0] == '!') continue;
         // Strip trailing slash (directory marker) — we match against file paths
-        const pat = std.mem.trimRight(u8, line, "/");
+        const pat = std.mem.trimEnd(u8, line, "/");
         if (pat.len == 0) continue;
         patterns.append(allocator, pat) catch {};
     }

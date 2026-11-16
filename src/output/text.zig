@@ -5,10 +5,9 @@ const Diagnostic = diagnostic.Diagnostic;
 pub const Color = struct {
     enabled: bool,
 
-    pub fn detect() Color {
-        if (getEnvBool("NO_COLOR") or getEnvBool("CI")) return .{ .enabled = false };
-        const stdout_handle = std.fs.File.stdout().handle;
-        return .{ .enabled = std.posix.isatty(stdout_handle) };
+    pub fn detect(io: std.Io, env: *const std.process.Environ.Map) Color {
+        if (getEnvBool(env, "NO_COLOR") or getEnvBool(env, "CI")) return .{ .enabled = false };
+        return .{ .enabled = std.Io.File.stdout().isTty(io) catch false };
     }
 
     pub fn bold(self: Color) []const u8 {
@@ -35,9 +34,8 @@ pub const Color = struct {
         return if (self.enabled) "\x1b[0m" else "";
     }
 
-    fn getEnvBool(name: []const u8) bool {
-        const val = std.process.getEnvVarOwned(std.heap.page_allocator, name) catch return false;
-        defer std.heap.page_allocator.free(val);
+    fn getEnvBool(env: *const std.process.Environ.Map, name: []const u8) bool {
+        const val = env.get(name) orelse return false;
         return val.len > 0;
     }
 };

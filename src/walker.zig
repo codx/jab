@@ -12,8 +12,7 @@ const supported_extensions = [_][]const u8{
     ".py",   ".pyi",
     ".tf",   ".tfvars",
     ".hcl",  ".tofu",
-    ".md",
-    ".toml",
+    ".md",   ".toml",
 };
 
 pub const default_skip_dirs = [_][]const u8{
@@ -35,6 +34,7 @@ const max_file_size = 1024 * 1024; // 1MB
 
 pub fn collectFiles(
     allocator: std.mem.Allocator,
+    io: std.Io,
     paths: []const []const u8,
     opts: Options,
 ) ![]FileEntry {
@@ -42,9 +42,9 @@ pub fn collectFiles(
 
     if (paths.len > 0) {
         for (paths) |p| {
-            const stat = std.fs.cwd().statFile(p) catch continue;
+            const stat = std.Io.Dir.cwd().statFile(io, p, .{}) catch continue;
             if (stat.kind == .directory) {
-                try walkDir(allocator, p, &files, opts);
+                try walkDir(allocator, io, p, &files, opts);
             } else {
                 if (stat.size <= max_file_size) {
                     try files.append(allocator, .{ .path = p, .rel_path = p });
@@ -52,18 +52,19 @@ pub fn collectFiles(
             }
         }
     } else {
-        try walkDir(allocator, ".", &files, opts);
+        try walkDir(allocator, io, ".", &files, opts);
     }
 
     return files.items;
 }
 
-fn walkDir(allocator: std.mem.Allocator, dir_path: []const u8, files: *std.ArrayList(FileEntry), opts: Options) !void {
-    const dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch return;
+fn walkDir(allocator: std.mem.Allocator, io: std.Io, dir_path: []const u8, files: *std.ArrayList(FileEntry), opts: Options) !void {
+    var dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch return;
+    defer dir.close(io);
     var w = dir.walk(allocator) catch return;
     defer w.deinit();
 
-    while (w.next() catch null) |entry| {
+    while (w.next(io) catch null) |entry| {
         if (entry.kind == .sym_link) continue;
         if (entry.kind != .file) continue;
 
@@ -81,7 +82,7 @@ fn walkDir(allocator: std.mem.Allocator, dir_path: []const u8, files: *std.Array
         const full_path = if (std.mem.eql(u8, dir_path, "."))
             allocator.dupe(u8, path_str) catch continue
         else blk: {
-            const trimmed_dir = std.mem.trimRight(u8, dir_path, "/\\");
+            const trimmed_dir = std.mem.trimEnd(u8, dir_path, "/\\");
             const joined = std.fmt.allocPrint(allocator, "{s}/{s}", .{ trimmed_dir, path_str }) catch continue;
             break :blk joined;
         };

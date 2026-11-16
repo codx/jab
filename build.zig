@@ -12,7 +12,13 @@ pub fn build(b: *std.Build) void {
         .strip = strip,
     });
 
-    addTreeSitter(b, exe_mod);
+    const ts_c = b.addTranslateC(.{
+        .root_source_file = b.path("vendor/tree-sitter/lib/include/tree_sitter/api.h"),
+        .target = target,
+        .optimize = optimize,
+    }).createModule();
+
+    addTreeSitter(b, exe_mod, ts_c);
 
     const exe = b.addExecutable(.{
         .name = "jab",
@@ -23,7 +29,7 @@ pub fn build(b: *std.Build) void {
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| run_cmd.addArgs(args);
+    run_cmd.addPassthruArgs();
 
     const run_step = b.step("run", "Run jab");
     run_step.dependOn(&run_cmd.step);
@@ -34,7 +40,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    addTreeSitter(b, test_mod);
+    addTreeSitter(b, test_mod, ts_c);
 
     const tests = b.addTest(.{
         .root_module = test_mod,
@@ -46,8 +52,9 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests.step);
 }
 
-fn addTreeSitter(b: *std.Build, mod: *std.Build.Module) void {
+fn addTreeSitter(b: *std.Build, mod: *std.Build.Module, ts_c: *std.Build.Module) void {
     mod.link_libc = true;
+    mod.addImport("tree_sitter_c", ts_c);
 
     mod.addIncludePath(b.path("vendor/tree-sitter/lib/include"));
     mod.addIncludePath(b.path("vendor/tree-sitter/lib/src"));

@@ -1,13 +1,13 @@
 const std = @import("std");
 
-pub fn getStagedFiles(allocator: std.mem.Allocator) ![][]const u8 {
-    const result = try std.process.Child.run(.{
-        .allocator = allocator,
+pub fn getStagedFiles(allocator: std.mem.Allocator, io: std.Io) ![][]const u8 {
+    const result = try std.process.run(allocator, io, .{
         .argv = &.{ "git", "diff", "--staged", "--name-only", "--diff-filter=ACMR" },
-        .max_output_bytes = 50 * 1024,
+        .stdout_limit = .limited(50 * 1024),
+        .stderr_limit = .limited(50 * 1024),
     });
 
-    if (result.term != .Exited or result.term.Exited != 0) {
+    if (result.term != .exited or result.term.exited != 0) {
         return error.GitCommandFailed;
     }
 
@@ -30,6 +30,7 @@ pub fn getStagedFiles(allocator: std.mem.Allocator) ![][]const u8 {
 /// allocator's arena lives.
 pub fn ignoredSet(
     allocator: std.mem.Allocator,
+    io: std.Io,
     paths: []const []const u8,
 ) !std.StringHashMapUnmanaged(void) {
     var ignored: std.StringHashMapUnmanaged(void) = .{};
@@ -49,16 +50,16 @@ pub fn ignoredSet(
         try argv.appendSlice(allocator, &.{ "git", "-c", "core.quotePath=false", "check-ignore" });
         try argv.appendSlice(allocator, chunk);
 
-        const result = try std.process.Child.run(.{
-            .allocator = allocator,
+        const result = try std.process.run(allocator, io, .{
             .argv = argv.items,
-            .max_output_bytes = 4 * 1024 * 1024,
+            .stdout_limit = .limited(4 * 1024 * 1024),
+            .stderr_limit = .limited(4 * 1024 * 1024),
         });
 
         switch (result.term) {
             // 0 = at least one path ignored, 1 = none ignored; both are fine.
             // Anything else (notably 128 = not a git repo) is a real failure.
-            .Exited => |code| if (code != 0 and code != 1) return error.GitCommandFailed,
+            .exited => |code| if (code != 0 and code != 1) return error.GitCommandFailed,
             else => return error.GitCommandFailed,
         }
 

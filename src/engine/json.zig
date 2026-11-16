@@ -210,7 +210,7 @@ fn findDuplicateKeyPositions(allocator: std.mem.Allocator, source: []const u8, d
     var depth: u32 = 0;
     var in_string = false;
     var escape = false;
-    var in_object_stack: [64]bool = [_]bool{false} ** 64;
+    var in_object_stack: [64]bool = @splat(false);
     var key_expected = false;
     var after_colon = false;
 

@@ -7,35 +7,36 @@ const RuleId = diagnostic.RuleId;
 /// Uses a pre-detected ToolSet to avoid repeated PATH lookups.
 pub fn runExternalTools(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
     existing_lines: []const u32,
     tools: ToolSet,
 ) !void {
     if (tools.shellcheck and isShellFile(path)) {
-        try runShellcheck(allocator, path, diags, existing_lines);
+        try runShellcheck(allocator, io, path, diags, existing_lines);
     }
     if (tools.yamllint and isYamlFile(path)) {
-        try runYamllint(allocator, path, diags, existing_lines);
+        try runYamllint(allocator, io, path, diags, existing_lines);
     }
     if (isPythonFile(path)) {
-        if (tools.ruff) try runRuff(allocator, path, diags, existing_lines);
-        if (tools.ty) try runTy(allocator, path, diags, existing_lines);
+        if (tools.ruff) try runRuff(allocator, io, path, diags, existing_lines);
+        if (tools.ty) try runTy(allocator, io, path, diags, existing_lines);
     }
     if (tools.tofu and isHclFile(path)) {
-        try runTofuFmt(allocator, path, diags);
+        try runTofuFmt(allocator, io, path, diags);
     }
     if (tools.hadolint and isDockerfile(path)) {
-        try runHadolint(allocator, path, diags, existing_lines);
+        try runHadolint(allocator, io, path, diags, existing_lines);
     }
     if (tools.actionlint and isGHActionsFile(path)) {
-        try runActionlint(allocator, path, diags, existing_lines);
+        try runActionlint(allocator, io, path, diags, existing_lines);
     }
     if (tools.taplo and isTomlFile(path)) {
-        try runTaploFmt(allocator, path, diags);
+        try runTaploFmt(allocator, io, path, diags);
     }
     if (tools.nixfmt and isNixFile(path)) {
-        try runNixfmt(allocator, path, diags);
+        try runNixfmt(allocator, io, path, diags);
     }
 }
 
@@ -79,19 +80,17 @@ fn isNixFile(path: []const u8) bool {
     return std.mem.endsWith(u8, path, ".nix");
 }
 
-pub fn findOnPath(tool: []const u8) bool {
-    const path_var = std.process.getEnvVarOwned(std.heap.page_allocator, "PATH") catch return false;
-    defer std.heap.page_allocator.free(path_var);
-    return findOnPathIn(path_var, tool);
+pub fn findOnPath(io: std.Io, path_var: []const u8, tool: []const u8) bool {
+    return findOnPathIn(io, path_var, tool);
 }
 
-fn findOnPathIn(path_var: []const u8, tool: []const u8) bool {
+fn findOnPathIn(io: std.Io, path_var: []const u8, tool: []const u8) bool {
     var it = std.mem.splitScalar(u8, path_var, ':');
-    var buf: [std.fs.max_path_bytes]u8 = undefined;
+    var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
     while (it.next()) |dir| {
         if (dir.len == 0) continue;
         const full = std.fmt.bufPrint(&buf, "{s}/{s}", .{ dir, tool }) catch continue;
-        _ = std.fs.cwd().statFile(full) catch continue;
+        _ = std.Io.Dir.cwd().statFile(io, full, .{}) catch continue;
         return true;
     }
     return false;
@@ -108,19 +107,17 @@ pub const ToolSet = struct {
     taplo: bool = false,
     nixfmt: bool = false,
 
-    pub fn detect() ToolSet {
-        const path_var = std.process.getEnvVarOwned(std.heap.page_allocator, "PATH") catch return .{};
-        defer std.heap.page_allocator.free(path_var);
+    pub fn detect(io: std.Io, path_var: []const u8) ToolSet {
         return .{
-            .shellcheck = findOnPathIn(path_var, "shellcheck"),
-            .yamllint = findOnPathIn(path_var, "yamllint"),
-            .ruff = findOnPathIn(path_var, "ruff"),
-            .ty = findOnPathIn(path_var, "ty"),
-            .tofu = findOnPathIn(path_var, "tofu"),
-            .hadolint = findOnPathIn(path_var, "hadolint"),
-            .actionlint = findOnPathIn(path_var, "actionlint"),
-            .taplo = findOnPathIn(path_var, "taplo"),
-            .nixfmt = findOnPathIn(path_var, "nixfmt"),
+            .shellcheck = findOnPathIn(io, path_var, "shellcheck"),
+            .yamllint = findOnPathIn(io, path_var, "yamllint"),
+            .ruff = findOnPathIn(io, path_var, "ruff"),
+            .ty = findOnPathIn(io, path_var, "ty"),
+            .tofu = findOnPathIn(io, path_var, "tofu"),
+            .hadolint = findOnPathIn(io, path_var, "hadolint"),
+            .actionlint = findOnPathIn(io, path_var, "actionlint"),
+            .taplo = findOnPathIn(io, path_var, "taplo"),
+            .nixfmt = findOnPathIn(io, path_var, "nixfmt"),
         };
     }
 };
@@ -159,29 +156,29 @@ fn createShadowContexts(allocator: std.mem.Allocator, originals: []const FileCon
     return shadows;
 }
 
-fn toolThread(tool: ToolType, contexts: []FileContext, indices: []const usize) void {
+fn toolThread(io: std.Io, tool: ToolType, contexts: []FileContext, indices: []const usize) void {
     var thread_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const alloc = thread_arena.allocator();
     switch (tool) {
-        .shellcheck => batchShellcheck(alloc, contexts, indices) catch {},
-        .yamllint => batchYamllint(alloc, contexts, indices) catch {},
-        .ruff => batchRuff(alloc, contexts, indices) catch {},
-        .ty => batchTy(alloc, contexts, indices) catch {},
-        .hadolint => batchHadolint(alloc, contexts, indices) catch {},
-        .actionlint => batchActionlint(alloc, contexts, indices) catch {},
+        .shellcheck => batchShellcheck(alloc, io, contexts, indices) catch {},
+        .yamllint => batchYamllint(alloc, io, contexts, indices) catch {},
+        .ruff => batchRuff(alloc, io, contexts, indices) catch {},
+        .ty => batchTy(alloc, io, contexts, indices) catch {},
+        .hadolint => batchHadolint(alloc, io, contexts, indices) catch {},
+        .actionlint => batchActionlint(alloc, io, contexts, indices) catch {},
         .tofu => {
             for (indices) |idx| {
-                runTofuFmt(alloc, contexts[idx].path, contexts[idx].diags) catch {};
+                runTofuFmt(alloc, io, contexts[idx].path, contexts[idx].diags) catch {};
             }
         },
         .taplo => {
             for (indices) |idx| {
-                runTaploFmt(alloc, contexts[idx].path, contexts[idx].diags) catch {};
+                runTaploFmt(alloc, io, contexts[idx].path, contexts[idx].diags) catch {};
             }
         },
         .nixfmt => {
             for (indices) |idx| {
-                runNixfmt(alloc, contexts[idx].path, contexts[idx].diags) catch {};
+                runNixfmt(alloc, io, contexts[idx].path, contexts[idx].diags) catch {};
             }
         },
     }
@@ -189,6 +186,7 @@ fn toolThread(tool: ToolType, contexts: []FileContext, indices: []const usize) v
 
 fn spawnTool(
     allocator: std.mem.Allocator,
+    io: std.Io,
     threads: *[max_tool_threads]?std.Thread,
     shadow_sets: *[max_tool_threads]?[]FileContext,
     count: *usize,
@@ -199,8 +197,8 @@ fn spawnTool(
     if (indices.len == 0 or count.* >= max_tool_threads) return;
     const shadows = createShadowContexts(allocator, contexts) catch return;
     shadow_sets[count.*] = shadows;
-    threads[count.*] = std.Thread.spawn(.{}, toolThread, .{ tool, shadows, indices }) catch {
-        toolThread(tool, shadows, indices);
+    threads[count.*] = std.Thread.spawn(.{}, toolThread, .{ io, tool, shadows, indices }) catch {
+        toolThread(io, tool, shadows, indices);
         count.* += 1;
         return;
     };
@@ -211,6 +209,7 @@ fn spawnTool(
 /// Each tool gets shadow diagnostic lists; results are merged after all complete.
 pub fn runBatchedExternalTools(
     allocator: std.mem.Allocator,
+    io: std.Io,
     file_results: anytype,
     tools: ToolSet,
 ) !void {
@@ -250,19 +249,19 @@ pub fn runBatchedExternalTools(
     }
 
     // Spawn one thread per enabled tool type
-    var threads: [max_tool_threads]?std.Thread = .{null} ** max_tool_threads;
-    var shadow_sets: [max_tool_threads]?[]FileContext = .{null} ** max_tool_threads;
+    var threads: [max_tool_threads]?std.Thread = @splat(null);
+    var shadow_sets: [max_tool_threads]?[]FileContext = @splat(null);
     var thread_count: usize = 0;
 
-    if (tools.shellcheck) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .shellcheck, contexts.items, shell_files.items);
-    if (tools.yamllint) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .yamllint, contexts.items, yaml_files.items);
-    if (tools.ruff) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .ruff, contexts.items, python_files.items);
-    if (tools.ty) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .ty, contexts.items, python_files.items);
-    if (tools.hadolint) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .hadolint, contexts.items, docker_files.items);
-    if (tools.actionlint) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .actionlint, contexts.items, actions_files.items);
-    if (tools.tofu) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .tofu, contexts.items, hcl_files.items);
-    if (tools.taplo) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .taplo, contexts.items, toml_files.items);
-    if (tools.nixfmt) spawnTool(allocator, &threads, &shadow_sets, &thread_count, .nixfmt, contexts.items, nix_files.items);
+    if (tools.shellcheck) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .shellcheck, contexts.items, shell_files.items);
+    if (tools.yamllint) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .yamllint, contexts.items, yaml_files.items);
+    if (tools.ruff) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .ruff, contexts.items, python_files.items);
+    if (tools.ty) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .ty, contexts.items, python_files.items);
+    if (tools.hadolint) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .hadolint, contexts.items, docker_files.items);
+    if (tools.actionlint) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .actionlint, contexts.items, actions_files.items);
+    if (tools.tofu) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .tofu, contexts.items, hcl_files.items);
+    if (tools.taplo) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .taplo, contexts.items, toml_files.items);
+    if (tools.nixfmt) spawnTool(allocator, io, &threads, &shadow_sets, &thread_count, .nixfmt, contexts.items, nix_files.items);
 
     // Join all threads
     for (&threads) |*t| {
@@ -291,24 +290,24 @@ fn hasExternalFix(path: []const u8, tools: ToolSet) bool {
         (tools.nixfmt and isNixFile(path));
 }
 
-fn fixThread(path: []const u8, tools: ToolSet) void {
+fn fixThread(io: std.Io, path: []const u8, tools: ToolSet) void {
     var thread_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const alloc = thread_arena.allocator();
-    runExternalFixes(alloc, path, tools);
+    runExternalFixes(alloc, io, path, tools);
 }
 
 /// Run external fixes in parallel: one thread per file.
 /// Each file is independent (different path), so no synchronization needed.
-pub fn runParallelExternalFixes(file_results: anytype, tools: ToolSet) void {
-    var fix_threads: [256]?std.Thread = .{null} ** 256;
+pub fn runParallelExternalFixes(io: std.Io, file_results: anytype, tools: ToolSet) void {
+    var fix_threads: [256]?std.Thread = @splat(null);
     var fix_count: usize = 0;
 
     for (file_results) |fr| {
         if (!hasExternalFix(fr.path, tools)) continue;
         if (fix_count >= 256) break;
 
-        fix_threads[fix_count] = std.Thread.spawn(.{}, fixThread, .{ fr.path, tools }) catch {
-            fixThread(fr.path, tools);
+        fix_threads[fix_count] = std.Thread.spawn(.{}, fixThread, .{ io, fr.path, tools }) catch {
+            fixThread(io, fr.path, tools);
             continue;
         };
         fix_count += 1;
@@ -335,14 +334,15 @@ fn shellcheckOverlap(sc_code: u32) ?RuleId {
 
 fn runShellcheck(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
     existing_lines: []const u32,
 ) !void {
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "shellcheck", "-f", "json", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     // shellcheck exits 1 when it finds issues — that's expected
@@ -412,18 +412,19 @@ fn runShellcheck(
 
 fn runTofuFmt(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
 ) !void {
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "tofu", "fmt", "-check", "-diff", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     // Exit 0 = already formatted, exit 3 = needs formatting
     const exit_code = switch (result.term) {
-        .Exited => |c| c,
+        .exited => |c| c,
         else => return,
     };
 
@@ -453,15 +454,16 @@ fn ruffOverlap(code: []const u8) ?RuleId {
 
 fn runYamllint(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
     existing_lines: []const u32,
 ) !void {
     // yamllint -f parsable outputs: path:line:col: [level] message (rule)
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "yamllint", "-f", "parsable", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -522,15 +524,16 @@ fn runYamllint(
 
 fn runRuff(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
     existing_lines: []const u32,
 ) !void {
     // ruff check --output-format=json
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "ruff", "check", "--output-format=json", "--no-fix", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -602,15 +605,16 @@ fn runRuff(
 
 fn runTy(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
     existing_lines: []const u32,
 ) !void {
     // ty check --output-format json <file>
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "ty", "check", "--output-format", "json", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -698,14 +702,15 @@ fn runTy(
 
 fn runHadolint(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
     existing_lines: []const u32,
 ) !void {
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "hadolint", "-f", "json", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -765,14 +770,15 @@ fn runHadolint(
 
 fn runActionlint(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
     existing_lines: []const u32,
 ) !void {
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "actionlint", "-format", "{{json .}}", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -837,17 +843,18 @@ fn runActionlint(
 
 fn runTaploFmt(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
 ) !void {
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "taplo", "fmt", "--check", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     const exit_code = switch (result.term) {
-        .Exited => |c| c,
+        .exited => |c| c,
         else => return,
     };
 
@@ -864,17 +871,18 @@ fn runTaploFmt(
 
 fn runNixfmt(
     allocator: std.mem.Allocator,
+    io: std.Io,
     path: []const u8,
     diags: *std.ArrayList(Diagnostic),
 ) !void {
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "nixfmt", "--check", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     const exit_code = switch (result.term) {
-        .Exited => |c| c,
+        .exited => |c| c,
         else => return,
     };
 
@@ -907,6 +915,7 @@ fn isExistingLine(existing_lines: []const u32, line: u32) bool {
 
 fn batchShellcheck(
     allocator: std.mem.Allocator,
+    io: std.Io,
     contexts: []const FileContext,
     indices: []const usize,
 ) !void {
@@ -919,10 +928,10 @@ fn batchShellcheck(
         try argv.append(allocator, contexts[idx].path);
     }
 
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = argv.items,
-        .max_output_bytes = 1024 * 1024,
+        .stdout_limit = .limited(1024 * 1024),
+        .stderr_limit = .limited(1024 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -984,6 +993,7 @@ fn batchShellcheck(
 
 fn batchYamllint(
     allocator: std.mem.Allocator,
+    io: std.Io,
     contexts: []const FileContext,
     indices: []const usize,
 ) !void {
@@ -995,10 +1005,10 @@ fn batchYamllint(
         try argv.append(allocator, contexts[idx].path);
     }
 
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = argv.items,
-        .max_output_bytes = 1024 * 1024,
+        .stdout_limit = .limited(1024 * 1024),
+        .stderr_limit = .limited(1024 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -1090,6 +1100,7 @@ fn parseYamllintLine(raw: []const u8) ?YamllintParsed {
 
 fn batchRuff(
     allocator: std.mem.Allocator,
+    io: std.Io,
     contexts: []const FileContext,
     indices: []const usize,
 ) !void {
@@ -1102,10 +1113,10 @@ fn batchRuff(
         try argv.append(allocator, contexts[idx].path);
     }
 
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = argv.items,
-        .max_output_bytes = 1024 * 1024,
+        .stdout_limit = .limited(1024 * 1024),
+        .stderr_limit = .limited(1024 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -1167,6 +1178,7 @@ fn batchRuff(
 
 fn batchTy(
     allocator: std.mem.Allocator,
+    io: std.Io,
     contexts: []const FileContext,
     indices: []const usize,
 ) !void {
@@ -1179,10 +1191,10 @@ fn batchTy(
         try argv.append(allocator, contexts[idx].path);
     }
 
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = argv.items,
-        .max_output_bytes = 1024 * 1024,
+        .stdout_limit = .limited(1024 * 1024),
+        .stderr_limit = .limited(1024 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -1273,6 +1285,7 @@ fn batchTy(
 
 fn batchHadolint(
     allocator: std.mem.Allocator,
+    io: std.Io,
     contexts: []const FileContext,
     indices: []const usize,
 ) !void {
@@ -1284,10 +1297,10 @@ fn batchHadolint(
         try argv.append(allocator, contexts[idx].path);
     }
 
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = argv.items,
-        .max_output_bytes = 1024 * 1024,
+        .stdout_limit = .limited(1024 * 1024),
+        .stderr_limit = .limited(1024 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -1350,6 +1363,7 @@ fn batchHadolint(
 
 fn batchActionlint(
     allocator: std.mem.Allocator,
+    io: std.Io,
     contexts: []const FileContext,
     indices: []const usize,
 ) !void {
@@ -1361,10 +1375,10 @@ fn batchActionlint(
         try argv.append(allocator, contexts[idx].path);
     }
 
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+    const result = std.process.run(allocator, io, .{
         .argv = argv.items,
-        .max_output_bytes = 1024 * 1024,
+        .stdout_limit = .limited(1024 * 1024),
+        .stderr_limit = .limited(1024 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
@@ -1432,70 +1446,70 @@ fn batchActionlint(
 
 /// Run external tool auto-fixes on a file (in-place).
 /// Called after jab's own fixes have been written.
-pub fn runExternalFixes(allocator: std.mem.Allocator, path: []const u8, tools: ToolSet) void {
+pub fn runExternalFixes(allocator: std.mem.Allocator, io: std.Io, path: []const u8, tools: ToolSet) void {
     if (tools.shellcheck and isShellFile(path)) {
-        shellcheckFix(allocator, path);
+        shellcheckFix(allocator, io, path);
     }
     if (tools.ruff and isPythonFile(path)) {
-        ruffFix(allocator, path);
+        ruffFix(allocator, io, path);
     }
     if (tools.tofu and isHclFile(path)) {
-        tofuFix(allocator, path);
+        tofuFix(allocator, io, path);
     }
     if (tools.taplo and isTomlFile(path)) {
-        taploFix(allocator, path);
+        taploFix(allocator, io, path);
     }
     if (tools.nixfmt and isNixFile(path)) {
-        nixfmtFix(allocator, path);
+        nixfmtFix(allocator, io, path);
     }
 }
 
-fn shellcheckFix(allocator: std.mem.Allocator, path: []const u8) void {
-    const result = std.process.Child.run(.{
-        .allocator = allocator,
+fn shellcheckFix(allocator: std.mem.Allocator, io: std.Io, path: []const u8) void {
+    const result = std.process.run(allocator, io, .{
         .argv = &.{ "shellcheck", "-f", "diff", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 
     if (result.stdout.len == 0) return;
 
-    const source = std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024) catch return;
+    const source = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(1024 * 1024 + 1)) catch return;
     const fixed = applyDiff(allocator, source, result.stdout) orelse return;
 
-    const file = std.fs.cwd().createFile(path, .{}) catch return;
-    defer file.close();
-    file.writeAll(fixed) catch {};
+    const file = std.Io.Dir.cwd().createFile(io, path, .{}) catch return;
+    defer file.close(io);
+    file.writeStreamingAll(io, fixed) catch {};
 }
 
-fn ruffFix(allocator: std.mem.Allocator, path: []const u8) void {
-    _ = std.process.Child.run(.{
-        .allocator = allocator,
+fn ruffFix(allocator: std.mem.Allocator, io: std.Io, path: []const u8) void {
+    _ = std.process.run(allocator, io, .{
         .argv = &.{ "ruff", "check", "--fix", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 }
 
-fn tofuFix(allocator: std.mem.Allocator, path: []const u8) void {
-    _ = std.process.Child.run(.{
-        .allocator = allocator,
+fn tofuFix(allocator: std.mem.Allocator, io: std.Io, path: []const u8) void {
+    _ = std.process.run(allocator, io, .{
         .argv = &.{ "tofu", "fmt", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 }
 
-fn taploFix(allocator: std.mem.Allocator, path: []const u8) void {
-    _ = std.process.Child.run(.{
-        .allocator = allocator,
+fn taploFix(allocator: std.mem.Allocator, io: std.Io, path: []const u8) void {
+    _ = std.process.run(allocator, io, .{
         .argv = &.{ "taplo", "fmt", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 }
 
-fn nixfmtFix(allocator: std.mem.Allocator, path: []const u8) void {
-    _ = std.process.Child.run(.{
-        .allocator = allocator,
+fn nixfmtFix(allocator: std.mem.Allocator, io: std.Io, path: []const u8) void {
+    _ = std.process.run(allocator, io, .{
         .argv = &.{ "nixfmt", path },
-        .max_output_bytes = 256 * 1024,
+        .stdout_limit = .limited(256 * 1024),
+        .stderr_limit = .limited(256 * 1024),
     }) catch return;
 }
 

@@ -652,7 +652,7 @@ fn isInsideHeredoc(node: ts.Node) bool {
 fn errexitEnabled(source: []const u8) bool {
     var iter = std.mem.splitScalar(u8, source, '\n');
     while (iter.next()) |raw_line| {
-        const trimmed = std.mem.trimLeft(u8, raw_line, " \t");
+        const trimmed = std.mem.trimStart(u8, raw_line, " \t");
         if (trimmed.len == 0 or trimmed[0] == '#') continue;
         if (!std.mem.startsWith(u8, trimmed, "set")) continue;
         if (trimmed.len < 4 or (trimmed[3] != ' ' and trimmed[3] != '\t')) continue;
