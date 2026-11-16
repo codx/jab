@@ -278,6 +278,12 @@ pub fn main() !void {
     for (file_paths) |path| {
         const source = std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024) catch continue;
 
+        // Staged mode lists every staged path, not just supported extensions,
+        // so binaries (images, archives, ...) can show up here. Skip them like
+        // the walker effectively does; linting them is noise and --fix would
+        // corrupt them (e.g. CRLF normalization inside a PNG header).
+        if (staged and walker.shouldSkipBinary(path, source)) continue;
+
         var diag_list: std.ArrayList(Diagnostic) = .empty;
 
         // JB0014: Large file warning (>512KB)
