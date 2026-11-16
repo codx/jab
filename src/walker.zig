@@ -12,8 +12,7 @@ const supported_extensions = [_][]const u8{
     ".py",   ".pyi",
     ".tf",   ".tfvars",
     ".hcl",  ".tofu",
-    ".md",
-    ".toml",
+    ".md",   ".toml",
 };
 
 pub const default_skip_dirs = [_][]const u8{
@@ -93,11 +92,33 @@ fn walkDir(allocator: std.mem.Allocator, dir_path: []const u8, files: *std.Array
     }
 }
 
-fn isSupportedFile(path: []const u8) bool {
+pub fn isSupportedFile(path: []const u8) bool {
     for (supported_extensions) |ext| {
         if (std.mem.endsWith(u8, path, ext)) return true;
     }
     return false;
+}
+
+/// Number of leading bytes inspected by `looksBinary`. Matches git's own
+/// binary heuristic (`buffer_is_binary` checks the first 8000 bytes).
+const binary_sniff_len = 8000;
+
+/// True if `content` contains a NUL byte within its first 8000 bytes, the same
+/// heuristic git uses to decide a blob is binary.
+pub fn looksBinary(content: []const u8) bool {
+    const head = content[0..@min(content.len, binary_sniff_len)];
+    return std.mem.indexOfScalar(u8, head, 0) != null;
+}
+
+/// True if a file that did not come through the directory walker (e.g. a
+/// git-staged path) should be skipped as binary. The walker only yields
+/// supported extensions, so binaries never reach the linter that way; staged
+/// mode sees every staged path and must filter them itself. Files with a
+/// supported extension are never skipped, so a stray NUL in e.g. a `.sh` is
+/// still reported by the null-byte rule, consistent with the walker.
+pub fn shouldSkipBinary(path: []const u8, content: []const u8) bool {
+    if (isSupportedFile(path)) return false;
+    return looksBinary(content);
 }
 
 /// True if any `/`-delimited component of `path` exactly matches an entry in `skips`.
@@ -137,6 +158,28 @@ test "pathHasSkipComponent matches whole components only" {
     try std.testing.expect(!pathHasSkipComponent("vendorx/x.zig", skips));
     try std.testing.expect(!pathHasSkipComponent("my_node_modules/x.zig", skips));
     try std.testing.expect(!pathHasSkipComponent("src/main.zig", skips));
+}
+
+test "looksBinary detects NUL in leading bytes only" {
+    try std.testing.expect(!looksBinary(""));
+    try std.testing.expect(!looksBinary("echo hi\n"));
+    try std.testing.expect(looksBinary("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"));
+    try std.testing.expect(looksBinary("abc\x00"));
+
+    // A NUL past the sniff window is not considered (matches git).
+    const late = [_]u8{'a'} ** binary_sniff_len ++ [_]u8{0};
+    try std.testing.expect(!looksBinary(&late));
+    const edge = [_]u8{'a'} ** (binary_sniff_len - 1) ++ [_]u8{0};
+    try std.testing.expect(looksBinary(&edge));
+}
+
+test "shouldSkipBinary skips unsupported binaries, keeps supported files" {
+    try std.testing.expect(shouldSkipBinary("img.png", "\x89PNG\r\n\x1a\n\x00\x00"));
+    try std.testing.expect(shouldSkipBinary("Makefile", "a\x00b"));
+    try std.testing.expect(!shouldSkipBinary("Makefile", "all:\n\ttrue\n"));
+    // Supported files keep being linted so the null-byte rule still fires.
+    try std.testing.expect(!shouldSkipBinary("deploy.sh", "echo hi\x00there\n"));
+    try std.testing.expect(!shouldSkipBinary("x.py", "\x00"));
 }
 
 test "pathHasSkipComponent empty skips" {
